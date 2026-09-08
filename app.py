@@ -1316,5 +1316,4 @@ st.sidebar.write(
 st.sidebar.write(
     "Interactive Quantum Education Platform"
 )
-atform"
-)
+
