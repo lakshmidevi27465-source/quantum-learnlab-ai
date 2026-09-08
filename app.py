@@ -3,9 +3,47 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import hashlib
+import json
+from pathlib import Path
 
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
+
+# =========================================================
+# SIMPLE LOCAL AUTHENTICATION
+# =========================================================
+# Prototype/MVP authentication using a local JSON file.
+# For public production deployment, replace this with a proper
+# authentication + database service.
+
+USERS_FILE = Path("users.json")
+
+def load_users():
+    if USERS_FILE.exists():
+        try:
+            return json.loads(USERS_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+    return {}
+
+def save_users(users):
+    USERS_FILE.write_text(json.dumps(users, indent=2), encoding="utf-8")
+
+def hash_password(password):
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+def authenticate_user(email, password):
+    users = load_users()
+    user = users.get(email.lower().strip())
+    return user is not None and user["password"] == hash_password(password)
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user_email" not in st.session_state:
+    st.session_state.user_email = ""
+if "user_name" not in st.session_state:
+    st.session_state.user_name = ""
 
 # =========================================================
 # PAGE CONFIGURATION
@@ -79,10 +117,82 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =========================================================
+# LOGIN / SIGN UP
+# =========================================================
+
+if not st.session_state.logged_in:
+    st.markdown(
+        '<div class="main-title">⚛️ Quantum LearnLab AI</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<div class="subtitle">Sign in to continue your quantum learning journey</div>',
+        unsafe_allow_html=True
+    )
+    st.divider()
+
+    login_tab, signup_tab = st.tabs(["🔐 Login", "📝 Sign Up"])
+
+    with login_tab:
+        st.subheader("Welcome back")
+        login_email = st.text_input("Email", key="login_email")
+        login_password = st.text_input("Password", type="password", key="login_password")
+
+        if st.button("🔓 Login", use_container_width=True):
+            if authenticate_user(login_email, login_password):
+                users = load_users()
+                email = login_email.lower().strip()
+                st.session_state.logged_in = True
+                st.session_state.user_email = email
+                st.session_state.user_name = users[email]["name"]
+                st.success("Login successful!")
+                st.rerun()
+            else:
+                st.error("Invalid email or password.")
+
+    with signup_tab:
+        st.subheader("Create your account")
+        signup_name = st.text_input("Name", key="signup_name")
+        signup_email = st.text_input("Email", key="signup_email")
+        signup_password = st.text_input("Password", type="password", key="signup_password")
+        signup_confirm = st.text_input("Confirm Password", type="password", key="signup_confirm")
+
+        if st.button("🚀 Create Account", use_container_width=True):
+            email = signup_email.lower().strip()
+            users = load_users()
+
+            if not signup_name.strip() or not email or not signup_password:
+                st.warning("Please fill all fields.")
+            elif "@" not in email:
+                st.warning("Please enter a valid email.")
+            elif len(signup_password) < 6:
+                st.warning("Password must contain at least 6 characters.")
+            elif signup_password != signup_confirm:
+                st.error("Passwords do not match.")
+            elif email in users:
+                st.error("An account with this email already exists.")
+            else:
+                users[email] = {
+                    "name": signup_name.strip(),
+                    "password": hash_password(signup_password)
+                }
+                save_users(users)
+                st.success("Account created. Please use the Login tab.")
+
+    st.stop()
+
+# =========================================================
 # SIDEBAR
 # =========================================================
 
 st.sidebar.title("⚛️ Quantum LearnLab AI")
+st.sidebar.success(f"👤 {st.session_state.user_name}")
+if st.sidebar.button("🚪 Logout"):
+    st.session_state.logged_in = False
+    st.session_state.user_email = ""
+    st.session_state.user_name = ""
+    st.rerun()
+
 
 page = st.sidebar.radio(
     "Navigation",
@@ -228,58 +338,152 @@ if page == "🏠 Home":
 elif page == "📚 Learn":
 
     st.title("📚 Learn Quantum Computing")
+    st.write("Learn the concepts using the explanations and figures from the supplied quantum-network paper.")
 
     topics = {
-        "Qubit":
-            "A qubit is the basic unit of quantum information. "
-            "Unlike a classical bit, it can exist in a superposition of states.",
-
-        "Superposition":
-            "Superposition allows a quantum state to represent a combination "
-            "of |0⟩ and |1⟩ until measurement.",
-
-        "Entanglement":
-            "Entanglement creates strong correlations between quantum systems.",
-
-        "Hadamard Gate":
-            "The H gate creates an equal superposition from |0⟩.",
-
-        "CNOT Gate":
-            "CNOT is a two-qubit controlled operation commonly used to create entanglement.",
-
-        "Measurement":
-            "Measurement converts a quantum state into a classical result.",
-
-        "Quantum Interference":
-            "Quantum amplitudes can reinforce or cancel one another.",
-
-        "Quantum Algorithms":
-            "Quantum algorithms use quantum effects to solve specific computational problems."
+        "Qubit": {
+            "description": "A qubit is the quantum counterpart of a classical bit. Unlike a classical bit, a qubit can exist in a superposition of states. When measured, it produces a classical outcome according to the measurement basis.",
+            "representation": "|ψ⟩ = α|0⟩ + β|1⟩",
+            "takeaway": "The measurement outcome depends on the quantum state and the measurement basis.",
+            "image": "assets/fig1_qubit_superposition.png",
+            "caption": "Figure 1 — Qubit in a superposition and collapse after measurement (from the supplied PDF)."
+        },
+        "Superposition": {
+            "description": "Superposition means that a quantum state can be represented as a combination of basis states until measurement. The supplied paper illustrates this using a qubit whose state is not determined before measurement.",
+            "representation": "|ψ⟩ = α|0⟩ + β|1⟩",
+            "takeaway": "Measurement selects a classical outcome from the quantum state.",
+            "image": "assets/fig1_qubit_superposition.png",
+            "caption": "Figure 1 — Superposition and measurement of a qubit (from the supplied PDF)."
+        },
+        "Entanglement": {
+            "description": "Entanglement produces correlations between quantum systems. The paper explains entanglement and shows entanglement swapping and quantum teleportation as important quantum-network operations.",
+            "representation": "H + CNOT → entangled qubits",
+            "takeaway": "Entangled-qubit measurement outcomes can be correlated even when the qubits do not directly interact at the end of the protocol.",
+            "image": "assets/fig3_entanglement_teleportation.png",
+            "caption": "Figure 3 — Entanglement swapping and quantum teleportation (from the supplied PDF)."
+        },
+        "Hadamard Gate": {
+            "description": "The Hadamard gate is shown in the paper's distributed quantum circuit. It creates a superposition from a computational-basis state; for example, |0⟩ is transformed into an equal superposition of |0⟩ and |1⟩.",
+            "representation": "H|0⟩ = (|0⟩ + |1⟩)/√2",
+            "takeaway": "The Hadamard operation is the first step in the paper's example distributed circuit.",
+            "image": "assets/fig4_hadamard_cnot_circuit.png",
+            "caption": "Figure 4 — Distributed circuit showing Hadamard and CNOT operations (from the supplied PDF)."
+        },
+        "CNOT Gate": {
+            "description": "CNOT is a two-qubit controlled operation. In the paper's example, CNOT operations are used to create entanglement between qubits as part of entanglement swapping.",
+            "representation": "Q0: ──●──\nQ1: ──⊕──",
+            "takeaway": "CNOT combined with Hadamard is a standard way to demonstrate entanglement.",
+            "image": "assets/fig4_hadamard_cnot_circuit.png",
+            "caption": "Figure 4 — Distributed quantum circuit containing CNOT operations (from the supplied PDF)."
+        },
+        "Measurement": {
+            "description": "Measurement is the process of observing a qubit with respect to a chosen basis. The supplied paper explains that measurement changes the state and maps the quantum result to a classical outcome.",
+            "representation": "Quantum state → Measurement → 0 or 1",
+            "takeaway": "The measurement basis matters, and measurement is an active process.",
+            "image": "assets/fig1_qubit_superposition.png",
+            "caption": "Figure 1 — Measurement of a qubit in the computational basis (from the supplied PDF)."
+        },
+        "Quantum Interference": {
+            "description": "The supplied PDF does not contain a dedicated figure specifically labelled as quantum interference. This lesson therefore explains the concept without claiming that a PDF figure depicts interference.",
+            "representation": "Amplitudes → constructive/destructive interference → probabilities",
+            "takeaway": "Interference changes probability amplitudes and is a key mechanism used by quantum algorithms.",
+            "image": None,
+            "caption": "No dedicated interference figure was found in the supplied PDF."
+        },
+        "Quantum Algorithms": {
+            "description": "Quantum algorithms combine quantum states, gates, measurements and interference to perform computational tasks. This platform also provides circuit simulations.",
+            "representation": "State preparation → gates → measurement",
+            "takeaway": "Quantum algorithms are built from sequences of quantum operations.",
+            "image": "assets/fig4_hadamard_cnot_circuit.png",
+            "caption": "Figure 4 — Example distributed quantum circuit from the supplied PDF."
+        }
     }
 
-    selected = st.selectbox(
-        "Select a topic",
-        list(topics.keys())
-    )
+    selected = st.selectbox("Select a topic", list(topics.keys()))
+    lesson = topics[selected]
 
     st.markdown(
         f"""
         <div class="card">
         <h2>{selected}</h2>
-        <p>{topics[selected]}</p>
+        <p>{lesson["description"]}</p>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-    if st.button("✅ Mark Topic Complete"):
+    st.subheader("🧠 Key idea")
+    st.info(lesson["takeaway"])
 
+    st.subheader("⚛️ Mathematical / Circuit Representation")
+    st.code(lesson["representation"])
+
+    if lesson["image"]:
+        image_path = Path(lesson["image"])
+        if image_path.exists():
+            st.subheader("🖼️ Figure from your PDF")
+            st.image(str(image_path), use_container_width=True)
+            st.caption(lesson["caption"])
+        else:
+            st.warning(f"Image asset not found: {image_path}. Upload the assets folder to GitHub.")
+    else:
+        st.info(lesson["caption"])
+
+    if selected == "Hadamard Gate":
+        qc_demo = QuantumCircuit(1)
+        qc_demo.h(0)
+        st.subheader("Interactive H-gate demonstration")
+        st.pyplot(draw_circuit(qc_demo))
+        if st.button("▶️ Simulate Hadamard", key="learn_h"):
+            st.write("Measurement:", run_circuit(qc_demo))
+            add_points(5)
+
+    elif selected == "CNOT Gate":
+        qc_demo = QuantumCircuit(2)
+        qc_demo.h(0)
+        qc_demo.cx(0, 1)
+        st.subheader("Interactive H + CNOT demonstration")
+        st.pyplot(draw_circuit(qc_demo))
+        if st.button("▶️ Simulate H + CNOT", key="learn_cnot"):
+            st.write("Measurement:", run_circuit(qc_demo))
+            add_points(5)
+
+    elif selected == "Superposition":
+        qc_demo = QuantumCircuit(1)
+        qc_demo.h(0)
+        st.subheader("Interactive superposition demonstration")
+        st.pyplot(draw_circuit(qc_demo))
+        if st.button("▶️ Simulate Superposition", key="learn_superposition"):
+            st.write("Measurement:", run_circuit(qc_demo))
+            add_points(5)
+
+    elif selected == "Entanglement":
+        qc_demo = QuantumCircuit(2)
+        qc_demo.h(0)
+        qc_demo.cx(0, 1)
+        st.subheader("Interactive Bell-state demonstration")
+        st.pyplot(draw_circuit(qc_demo))
+        if st.button("▶️ Simulate Entanglement", key="learn_entanglement"):
+            st.write("Measurement:", run_circuit(qc_demo))
+            add_points(5)
+
+    elif selected == "Measurement":
+        qc_demo = QuantumCircuit(1)
+        qc_demo.h(0)
+        qc_demo.measure_all()
+        st.subheader("Interactive measurement demonstration")
+        st.pyplot(draw_circuit(qc_demo))
+        if st.button("▶️ Run Measurement", key="learn_measurement"):
+            st.write("Measurement:", run_circuit(qc_demo))
+            add_points(5)
+
+    elif selected == "Quantum Algorithms":
+        st.info("Use 🧪 Quantum Algorithms in the sidebar for algorithm demonstrations.")
+
+    if st.button("✅ Mark Topic Complete"):
         complete_topic(selected)
         check_badges()
-
-        st.success(
-            f"{selected} completed! +10 points"
-        )
+        st.success(f"{selected} completed! +10 points")
 
 
 # =========================================================
@@ -1111,4 +1315,6 @@ st.sidebar.write(
 
 st.sidebar.write(
     "Interactive Quantum Education Platform"
+)
+atform"
 )
