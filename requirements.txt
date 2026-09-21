@@ -1,7 +1,7 @@
 streamlit
-qiskit
-qiskit-aer
-matplotlib
 numpy
 pandas
-pylatexenc
+matplotlib
+qiskit
+qiskit-aer
+supabase
