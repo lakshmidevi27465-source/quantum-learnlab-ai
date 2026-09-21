@@ -118,6 +118,13 @@ if "badges" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
+if "workflow" not in st.session_state:
+    st.session_state.workflow = {}
+
+if "workflow_topic" not in st.session_state:
+    st.session_state.workflow_topic = ""
+
+
 
 # =========================================================
 # CUSTOM CSS
@@ -363,6 +370,7 @@ page = st.sidebar.radio(
     [
         "🏠 Home",
         "📚 Learn",
+        "🔄 Learning Workflow",
         "⚛️ Circuit Builder",
         "🧪 Quantum Algorithms",
         "📊 Visualization",
@@ -475,6 +483,365 @@ def draw_circuit(qc):
 
 
 # =========================================================
+# INTEGRATED LEARNING WORKFLOW
+# ASK → EXPLAIN → BUILD → SIMULATE → VISUALIZE
+# → ASSESS/ADAPT → NEXT LEARNING PATH
+# =========================================================
+
+def identify_workflow_topic(user_input):
+
+    text = user_input.lower()
+
+    topic_map = [
+        ("superposition", "Superposition"),
+        ("hadamard", "Hadamard Gate"),
+        ("h gate", "Hadamard Gate"),
+        ("entanglement", "Entanglement"),
+        ("cnot", "CNOT Gate"),
+        ("measurement", "Measurement"),
+        ("qubit", "Qubit"),
+        ("interference", "Quantum Interference"),
+        ("grover", "Quantum Algorithms"),
+        ("algorithm", "Quantum Algorithms"),
+    ]
+
+    for keyword, topic in topic_map:
+        if keyword in text:
+            return topic
+
+    return "Qubit"
+
+
+def workflow_explain(topic):
+
+    explanations = {
+        "Qubit": (
+            "A qubit is the basic unit of quantum information. "
+            "It can be represented as a combination of |0⟩ and |1⟩ "
+            "until measurement."
+        ),
+        "Superposition": (
+            "Superposition means a quantum state can be represented "
+            "as a combination of basis states. A Hadamard gate can "
+            "create an equal superposition from |0⟩."
+        ),
+        "Hadamard Gate": (
+            "The Hadamard gate creates an equal superposition from |0⟩: "
+            "H|0⟩ = (|0⟩ + |1⟩)/√2."
+        ),
+        "Entanglement": (
+            "Entanglement creates correlations between quantum systems. "
+            "A Hadamard gate followed by CNOT can demonstrate a Bell state."
+        ),
+        "CNOT Gate": (
+            "CNOT is a controlled-NOT operation. When the control qubit "
+            "is |1⟩, the target qubit is flipped."
+        ),
+        "Measurement": (
+            "Measurement converts quantum information into a classical "
+            "outcome such as 0 or 1. Repeated measurements reveal a "
+            "probability distribution."
+        ),
+        "Quantum Interference": (
+            "Quantum interference occurs when probability amplitudes "
+            "combine constructively or destructively. It is important "
+            "in many quantum algorithms."
+        ),
+        "Quantum Algorithms": (
+            "Quantum algorithms use quantum states, gates, interference "
+            "and measurement to perform computational tasks."
+        )
+    }
+
+    return explanations.get(topic, explanations["Qubit"])
+
+
+def workflow_build(topic):
+
+    if topic in ["Entanglement", "CNOT Gate"]:
+        qc = QuantumCircuit(2)
+        qc.h(0)
+        qc.cx(0, 1)
+        description = "2-qubit Bell-state circuit: H(Q0) → CNOT(Q0,Q1)"
+
+    elif topic in ["Superposition", "Hadamard Gate", "Measurement"]:
+        qc = QuantumCircuit(1)
+        qc.h(0)
+        description = "1-qubit circuit: H(Q0)"
+
+    elif topic == "Quantum Interference":
+        qc = QuantumCircuit(1)
+        qc.h(0)
+        qc.z(0)
+        qc.h(0)
+        description = "1-qubit interference example: H → Z → H"
+
+    elif topic == "Quantum Algorithms":
+        qc = QuantumCircuit(2)
+        qc.h([0, 1])
+        qc.cx(0, 1)
+        description = "2-qubit algorithm practice circuit: H → H + CNOT"
+
+    else:
+        qc = QuantumCircuit(1)
+        description = "1-qubit initial circuit"
+
+    return qc, description
+
+
+def workflow_visualize(counts):
+
+    labels = list(counts.keys())
+    values = list(counts.values())
+    total = sum(values) if values else 1
+    probabilities = [v / total for v in values]
+
+    fig, ax = plt.subplots()
+    ax.bar(labels, probabilities)
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("Probability")
+    ax.set_xlabel("Measurement outcome")
+    ax.set_title("Simulation Probability Distribution")
+    return fig, probabilities
+
+
+def workflow_assessment(topic):
+
+    questions = {
+        "Qubit": (
+            "What is the basic unit of quantum information?",
+            ["Bit", "Qubit", "Byte", "Neuron"],
+            "Qubit"
+        ),
+        "Superposition": (
+            "Which gate can create an equal superposition from |0⟩?",
+            ["X", "Z", "H", "CNOT"],
+            "H"
+        ),
+        "Hadamard Gate": (
+            "What is the main purpose of the Hadamard gate in this demo?",
+            ["Create superposition", "Delete a qubit", "Measure only", "Add a classical bit"],
+            "Create superposition"
+        ),
+        "Entanglement": (
+            "Which combination is commonly used to create a Bell state?",
+            ["X + Z", "H + CNOT", "RX only", "Measurement only"],
+            "H + CNOT"
+        ),
+        "CNOT Gate": (
+            "CNOT primarily acts on how many qubits?",
+            ["One", "Two", "Three", "Zero"],
+            "Two"
+        ),
+        "Measurement": (
+            "What does measurement produce for a computational-basis qubit?",
+            ["A classical outcome", "A new qubit", "A gate", "A circuit diagram"],
+            "A classical outcome"
+        ),
+        "Quantum Interference": (
+            "What combines during quantum interference?",
+            ["Probability amplitudes", "Passwords", "Classical bits", "CPU cores"],
+            "Probability amplitudes"
+        ),
+        "Quantum Algorithms": (
+            "Which element is commonly part of a quantum algorithm?",
+            ["Quantum gates", "Only HTML", "Only databases", "Only sensors"],
+            "Quantum gates"
+        )
+    }
+
+    return questions.get(topic, questions["Qubit"])
+
+
+def workflow_next_topic(topic, passed):
+
+    path = {
+        "Qubit": "Superposition",
+        "Superposition": "Hadamard Gate",
+        "Hadamard Gate": "Entanglement",
+        "Entanglement": "CNOT Gate",
+        "CNOT Gate": "Measurement",
+        "Measurement": "Quantum Interference",
+        "Quantum Interference": "Quantum Algorithms",
+        "Quantum Algorithms": "Qubit"
+    }
+
+    if passed:
+        return path.get(topic, "Qubit")
+
+    return topic
+
+
+def run_learning_workflow(user_input):
+
+    # ASK
+    topic = identify_workflow_topic(user_input)
+
+    # EXPLAIN
+    explanation = workflow_explain(topic)
+
+    # BUILD
+    qc, build_description = workflow_build(topic)
+
+    # SIMULATE
+    counts = run_circuit(qc, shots=1024)
+
+    # VISUALIZE
+    fig, probabilities = workflow_visualize(counts)
+
+    question, options, answer = workflow_assessment(topic)
+
+    workflow = {
+        "question": user_input,
+        "topic": topic,
+        "explanation": explanation,
+        "circuit": qc,
+        "build_description": build_description,
+        "counts": counts,
+        "visualization": fig,
+        "probabilities": probabilities,
+        "assessment_question": question,
+        "assessment_options": options,
+        "assessment_answer": answer,
+        "assessment_done": False,
+        "score": None,
+        "next_topic": topic
+    }
+
+    st.session_state.workflow = workflow
+    st.session_state.workflow_topic = topic
+    return workflow
+
+
+# =========================================================
+# INTEGRATED LEARNING WORKFLOW PAGE
+# =========================================================
+
+if page == "🔄 Learning Workflow":
+
+    st.title("🔄 Integrated Quantum Learning Workflow")
+
+    st.write(
+        "ASK → EXPLAIN → BUILD → SIMULATE → VISUALIZE "
+        "→ ASSESS / ADAPT → NEXT LEARNING PATH"
+    )
+
+    st.caption(
+        "This page connects the existing tutor, circuit, Qiskit simulator, "
+        "visualization, assessment and progress components into one learning loop."
+    )
+
+    st.divider()
+
+    user_input = st.text_input(
+        "1️⃣ ASK — What do you want to learn?",
+        placeholder="Example: I want to learn superposition",
+        key="workflow_input"
+    )
+
+    if st.button("🚀 Start Learning Workflow", use_container_width=True):
+
+        if not user_input.strip():
+            st.warning("Please enter a learning question or goal.")
+        else:
+            with st.spinner("Running the integrated quantum learning workflow..."):
+                run_learning_workflow(user_input)
+            st.success("Workflow started. Continue through the stages below.")
+
+    workflow = st.session_state.workflow
+
+    if workflow:
+
+        st.divider()
+
+        # 1 ASK
+        st.subheader("1️⃣ ASK")
+        st.info(workflow["question"])
+
+        # 2 EXPLAIN
+        st.subheader("2️⃣ EXPLAIN")
+        st.write(workflow["explanation"])
+        st.caption(f"Detected learning topic: {workflow['topic']}")
+
+        # 3 BUILD
+        st.subheader("3️⃣ BUILD")
+        st.write(workflow["build_description"])
+        try:
+            st.pyplot(draw_circuit(workflow["circuit"]))
+        except Exception:
+            st.code(str(workflow["circuit"]))
+
+        # 4 SIMULATE
+        st.subheader("4️⃣ SIMULATE")
+        st.success("Circuit simulated using the existing Qiskit Aer backend.")
+        st.write("Measurement counts:", workflow["counts"])
+
+        # 5 VISUALIZE
+        st.subheader("5️⃣ VISUALIZE")
+        st.pyplot(workflow["visualization"])
+        st.write("The chart above is generated directly from the simulation counts.")
+
+        # 6 ASSESS / ADAPT
+        st.subheader("6️⃣ ASSESS / ADAPT")
+
+        answer = st.radio(
+            workflow["assessment_question"],
+            workflow["assessment_options"],
+            key="workflow_assessment_answer"
+        )
+
+        if st.button("✅ Submit Assessment", key="workflow_submit_assessment"):
+
+            correct = answer == workflow["assessment_answer"]
+            workflow["assessment_done"] = True
+            workflow["score"] = 1 if correct else 0
+
+            if correct:
+                add_points(15)
+                complete_topic(workflow["topic"])
+                check_badges()
+                st.success("Correct! +15 points")
+            else:
+                add_points(5)
+                check_badges()
+                st.warning(
+                    f"Not quite. Correct answer: {workflow['assessment_answer']}. +5 points"
+                )
+
+            workflow["next_topic"] = workflow_next_topic(
+                workflow["topic"],
+                correct
+            )
+
+            st.session_state.workflow = workflow
+
+        # 7 NEXT LEARNING PATH
+        if workflow.get("assessment_done"):
+
+            st.subheader("7️⃣ NEXT LEARNING PATH")
+
+            if workflow["score"] == 1:
+                st.success(
+                    f"Recommended next topic: {workflow['next_topic']}"
+                )
+            else:
+                st.info(
+                    f"Recommended action: review {workflow['topic']} and try the assessment again."
+                )
+
+            if st.button("➡️ Continue to Next Topic", key="workflow_next_topic"):
+                next_topic = workflow["next_topic"]
+                new_question = f"I want to learn {next_topic}"
+                with st.spinner("Preparing the next learning activity..."):
+                    run_learning_workflow(new_question)
+                st.rerun()
+
+            st.divider()
+            st.metric("Current Points", st.session_state.points)
+            st.metric("Topics Completed", len(st.session_state.completed))
+
+
+# =========================================================
 # HOME
 # =========================================================
 
@@ -526,8 +893,8 @@ if page == "🏠 Home":
     )
 
     st.write(
-        "Learn → Build → Run → Visualize → "
-        "Ask AI → Fix → Challenge → Track"
+        "ASK → EXPLAIN → BUILD → SIMULATE → "
+        "VISUALIZE → ASSESS/ADAPT → NEXT LEARNING PATH"
     )
 
     st.subheader(
