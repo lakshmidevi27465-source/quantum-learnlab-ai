@@ -6,6 +6,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from supabase import create_client, Client
+
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 
@@ -25,9 +27,7 @@ st.set_page_config(
 # FILE PATHS
 # =========================================================
 
-USERS_FILE = Path("users.json")
 ASSETS_DIR = Path("assets")
-
 
 FIG_QUBIT = ASSETS_DIR / "fig1_qubit_superposition.png"
 FIG_ENTANGLEMENT = ASSETS_DIR / "fig3_entanglement_teleportation.png"
@@ -35,67 +35,116 @@ FIG_CIRCUIT = ASSETS_DIR / "fig4_hadamard_cnot_circuit.png"
 
 
 # =========================================================
-# AUTHENTICATION
+# SUPABASE AUTHENTICATION + PERSISTENT DATA
 # =========================================================
 
-def load_users():
+@st.cache_resource
+def get_supabase() -> Client:
+    url = st.secrets.get("SUPABASE_URL", "")
+    key = st.secrets.get("SUPABASE_KEY", "")
+    if not url or not key:
+        return None
+    return create_client(url, key)
 
-    if USERS_FILE.exists():
 
+def load_profile(user_id):
+    sb = get_supabase()
+    if sb is None:
+        return None
+    try:
+        result = sb.table("profiles").select("*").eq("id", user_id).limit(1).execute()
+        if result.data:
+            return result.data[0]
+    except Exception as e:
+        st.error(f"Could not load your profile: {e}")
+    return None
+
+
+def save_profile():
+    user_id = st.session_state.get("user_id", "")
+    if not user_id:
+        return
+    sb = get_supabase()
+    if sb is None:
+        return
+    data = {
+        "id": user_id,
+        "name": st.session_state.get("user_name", ""),
+        "completed": st.session_state.get("completed", []),
+        "quiz_score": int(st.session_state.get("quiz_score", 0)),
+        "points": int(st.session_state.get("points", 0)),
+        "badges": st.session_state.get("badges", []),
+        "history": st.session_state.get("history", []),
+    }
+    try:
+        sb.table("profiles").upsert(data).execute()
+    except Exception as e:
+        st.warning(f"Progress could not be saved: {e}")
+
+
+def load_user_progress(user_id):
+    profile = load_profile(user_id)
+    if not profile:
+        return
+    st.session_state.user_name = profile.get("name", st.session_state.user_name)
+    st.session_state.completed = profile.get("completed") or []
+    st.session_state.quiz_score = int(profile.get("quiz_score") or 0)
+    st.session_state.points = int(profile.get("points") or 0)
+    st.session_state.badges = profile.get("badges") or []
+    st.session_state.history = profile.get("history") or []
+
+
+def require_supabase():
+    if get_supabase() is None:
+        st.error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_KEY to Streamlit Secrets.")
+        st.stop()
+
+
+def sign_in(email, password):
+    sb = get_supabase()
+    if sb is None:
+        return None, "Supabase is not configured."
+    try:
+        result = sb.auth.sign_in_with_password({"email": email.strip().lower(), "password": password})
+        return result, None
+    except Exception as e:
+        return None, str(e)
+
+
+def sign_up(email, password, name):
+    sb = get_supabase()
+    if sb is None:
+        return None, "Supabase is not configured."
+    try:
+        result = sb.auth.sign_up({
+            "email": email.strip().lower(),
+            "password": password,
+            "options": {"data": {"name": name.strip()}},
+        })
+        return result, None
+    except Exception as e:
+        return None, str(e)
+
+
+def sign_out():
+    sb = get_supabase()
+    if sb is not None:
         try:
-
-            return json.loads(
-                USERS_FILE.read_text(
-                    encoding="utf-8"
-                )
-            )
-
+            sb.auth.sign_out()
         except Exception:
-
-            return {}
-
-    return {}
-
-
-def save_users(users):
-
-    USERS_FILE.write_text(
-        json.dumps(
-            users,
-            indent=2
-        ),
-        encoding="utf-8"
-    )
-
-
-def hash_password(password):
-
-    return hashlib.sha256(
-        password.encode("utf-8")
-    ).hexdigest()
-
-
-def authenticate_user(email, password):
-
-    users = load_users()
-
-    user = users.get(
-        email.lower().strip()
-    )
-
-    return (
-        user is not None
-        and user["password"]
-        == hash_password(password)
-    )
+            pass
 
 
 # =========================================================
 # SESSION STATE
 # =========================================================
 
+
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
+
+if "user_id" not in st.session_state:
+    st.session_state.user_id = ""
 
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
@@ -167,6 +216,8 @@ st.markdown(
 
 if not st.session_state.logged_in:
 
+    require_supabase()
+
     st.markdown(
         '<div class="main-title">'
         '⚛️ Quantum LearnLab AI'
@@ -183,153 +234,70 @@ if not st.session_state.logged_in:
 
     st.divider()
 
-    login_tab, signup_tab = st.tabs(
-        [
-            "🔐 Login",
-            "📝 Sign Up"
-        ]
-    )
-
-
-    # =====================================================
-    # LOGIN
-    # =====================================================
+    login_tab, signup_tab = st.tabs(["🔐 Login", "📝 Sign Up"])
 
     with login_tab:
-
         st.subheader("Welcome back")
+        login_email = st.text_input("Email", key="login_email")
+        login_password = st.text_input("Password", type="password", key="login_password")
 
-        login_email = st.text_input(
-            "Email",
-            key="login_email"
-        )
-
-        login_password = st.text_input(
-            "Password",
-            type="password",
-            key="login_password"
-        )
-
-        if st.button(
-            "🔓 Login",
-            use_container_width=True
-        ):
-
-            if authenticate_user(
-                login_email,
-                login_password
-            ):
-
-                users = load_users()
-
-                email = login_email.lower().strip()
-
-                st.session_state.logged_in = True
-                st.session_state.user_email = email
-                st.session_state.user_name = users[email]["name"]
-
-                st.success(
-                    "Login successful!"
-                )
-
-                st.rerun()
-
+        if st.button("🔓 Login", use_container_width=True):
+            if not login_email.strip() or not login_password:
+                st.warning("Please enter your email and password.")
             else:
-
-                st.error(
-                    "Invalid email or password."
-                )
-
-
-    # =====================================================
-    # SIGN UP
-    # =====================================================
+                result, error = sign_in(login_email, login_password)
+                if error:
+                    st.error("Invalid email or password.")
+                else:
+                    user = result.user
+                    st.session_state.logged_in = True
+                    st.session_state.user_id = str(user.id)
+                    st.session_state.user_email = user.email or login_email.strip().lower()
+                    metadata = user.user_metadata or {}
+                    st.session_state.user_name = metadata.get("name", "Learner")
+                    load_user_progress(st.session_state.user_id)
+                    st.success("Login successful!")
+                    st.rerun()
 
     with signup_tab:
+        st.subheader("Create your account")
+        signup_name = st.text_input("Name", key="signup_name")
+        signup_email = st.text_input("Email", key="signup_email")
+        signup_password = st.text_input("Password", type="password", key="signup_password")
+        signup_confirm = st.text_input("Confirm Password", type="password", key="signup_confirm")
 
-        st.subheader(
-            "Create your account"
-        )
-
-        signup_name = st.text_input(
-            "Name",
-            key="signup_name"
-        )
-
-        signup_email = st.text_input(
-            "Email",
-            key="signup_email"
-        )
-
-        signup_password = st.text_input(
-            "Password",
-            type="password",
-            key="signup_password"
-        )
-
-        signup_confirm = st.text_input(
-            "Confirm Password",
-            type="password",
-            key="signup_confirm"
-        )
-
-        if st.button(
-            "🚀 Create Account",
-            use_container_width=True
-        ):
-
+        if st.button("🚀 Create Account", use_container_width=True):
             email = signup_email.lower().strip()
-
-            users = load_users()
-
-            if (
-                not signup_name.strip()
-                or not email
-                or not signup_password
-            ):
-
-                st.warning(
-                    "Please fill all fields."
-                )
-
+            if not signup_name.strip() or not email or not signup_password:
+                st.warning("Please fill all fields.")
             elif "@" not in email:
-
-                st.warning(
-                    "Please enter a valid email."
-                )
-
+                st.warning("Please enter a valid email.")
             elif len(signup_password) < 6:
-
-                st.warning(
-                    "Password must contain at least 6 characters."
-                )
-
+                st.warning("Password must contain at least 6 characters.")
             elif signup_password != signup_confirm:
-
-                st.error(
-                    "Passwords do not match."
-                )
-
-            elif email in users:
-
-                st.error(
-                    "An account with this email already exists."
-                )
-
+                st.error("Passwords do not match.")
             else:
-
-                users[email] = {
-                    "name": signup_name.strip(),
-                    "password": hash_password(
-                        signup_password
-                    )
-                }
-
-                save_users(users)
-
-                st.success(
-                    "Account created. Please use the Login tab."
-                )
+                result, error = sign_up(email, signup_password, signup_name)
+                if error:
+                    st.error(f"Could not create account: {error}")
+                else:
+                    user = result.user
+                    session = result.session
+                    if session is not None:
+                        st.session_state.logged_in = True
+                        st.session_state.user_id = str(user.id)
+                        st.session_state.user_email = user.email or email
+                        st.session_state.user_name = signup_name.strip()
+                        st.session_state.completed = []
+                        st.session_state.quiz_score = 0
+                        st.session_state.points = 0
+                        st.session_state.badges = []
+                        st.session_state.history = []
+                        save_profile()
+                        st.success("Account created and logged in successfully!")
+                        st.rerun()
+                    else:
+                        st.success("Account created. Please check your email for confirmation, then use Login.")
 
     st.stop()
 
@@ -351,7 +319,9 @@ if st.sidebar.button(
     "🚪 Logout"
 ):
 
+    sign_out()
     st.session_state.logged_in = False
+    st.session_state.user_id = ""
     st.session_state.user_email = ""
     st.session_state.user_name = ""
 
@@ -403,6 +373,7 @@ page = st.sidebar.radio(
 def add_points(points):
 
     st.session_state.points += points
+    save_profile()
 
 
 def complete_topic(topic):
@@ -414,6 +385,7 @@ def complete_topic(topic):
         )
 
         add_points(10)
+        save_profile()
 
 
 def check_badges():
@@ -456,6 +428,8 @@ def check_badges():
             st.session_state.badges.append(
                 "Quantum Champion"
             )
+
+    save_profile()
 
 
 def run_circuit(
@@ -695,6 +669,7 @@ def render_workflow():
                 st.session_state.workflow_score = 100
                 st.session_state.quiz_score = max(st.session_state.quiz_score, 5)
                 st.session_state.points += 20
+                save_profile()
                 st.success("Correct. Adaptive learning can continue to the next topic.")
             else:
                 st.session_state.workflow_score = 0
@@ -1455,6 +1430,7 @@ elif page == "⚛️ Circuit Builder":
                 "Result": counts
             }
         )
+        save_profile()
 
         st.subheader(
             "Measurement Result"
@@ -2372,6 +2348,7 @@ elif page == "📝 Quiz":
     ):
 
         st.session_state.quiz_score = score
+        save_profile()
 
 
         if score == len(questions):
