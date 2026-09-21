@@ -118,13 +118,6 @@ if "badges" not in st.session_state:
 if "history" not in st.session_state:
     st.session_state.history = []
 
-if "workflow" not in st.session_state:
-    st.session_state.workflow = {}
-
-if "workflow_topic" not in st.session_state:
-    st.session_state.workflow_topic = ""
-
-
 
 # =========================================================
 # CUSTOM CSS
@@ -365,12 +358,30 @@ if st.sidebar.button(
     st.rerun()
 
 
+if "workflow_stage" not in st.session_state:
+    st.session_state.workflow_stage = "ASK"
+
+if "workflow_question" not in st.session_state:
+    st.session_state.workflow_question = ""
+
+if "workflow_topic" not in st.session_state:
+    st.session_state.workflow_topic = "Superposition"
+
+if "workflow_explanation" not in st.session_state:
+    st.session_state.workflow_explanation = ""
+
+if "workflow_simulation" not in st.session_state:
+    st.session_state.workflow_simulation = None
+
+if "workflow_score" not in st.session_state:
+    st.session_state.workflow_score = None
+
 page = st.sidebar.radio(
     "Navigation",
     [
+        "🚀 Learning Workflow",
         "🏠 Home",
         "📚 Learn",
-        "🔄 Learning Workflow",
         "⚛️ Circuit Builder",
         "🧪 Quantum Algorithms",
         "📊 Visualization",
@@ -380,7 +391,8 @@ page = st.sidebar.radio(
         "📝 Quiz",
         "📈 Progress",
         "🏆 Leaderboard"
-    ]
+    ],
+    index=0
 )
 
 
@@ -483,369 +495,245 @@ def draw_circuit(qc):
 
 
 # =========================================================
-# INTEGRATED LEARNING WORKFLOW
-# ASK → EXPLAIN → BUILD → SIMULATE → VISUALIZE
-# → ASSESS/ADAPT → NEXT LEARNING PATH
+# INTERACTIVE PATENT WORKFLOW
 # =========================================================
 
-def identify_workflow_topic(user_input):
-
-    text = user_input.lower()
-
-    topic_map = [
-        ("superposition", "Superposition"),
-        ("hadamard", "Hadamard Gate"),
-        ("h gate", "Hadamard Gate"),
-        ("entanglement", "Entanglement"),
-        ("cnot", "CNOT Gate"),
-        ("measurement", "Measurement"),
-        ("qubit", "Qubit"),
-        ("interference", "Quantum Interference"),
-        ("grover", "Quantum Algorithms"),
-        ("algorithm", "Quantum Algorithms"),
-    ]
-
-    for keyword, topic in topic_map:
-        if keyword in text:
-            return topic
-
-    return "Qubit"
+def workflow_topic_from_question(question):
+    q = question.lower()
+    if "entangle" in q or "bell" in q:
+        return "Entanglement"
+    if "cnot" in q or "controlled not" in q:
+        return "CNOT Gate"
+    if "hadamard" in q or "h gate" in q or "superposition" in q:
+        return "Superposition"
+    if "measurement" in q or "measure" in q:
+        return "Measurement"
+    if "grover" in q or "search" in q:
+        return "Grover Search"
+    if "qft" in q or "fourier" in q:
+        return "QFT"
+    if "qubit" in q:
+        return "Qubit"
+    return "Superposition"
 
 
 def workflow_explain(topic):
-
     explanations = {
-        "Qubit": (
-            "A qubit is the basic unit of quantum information. "
-            "It can be represented as a combination of |0⟩ and |1⟩ "
-            "until measurement."
-        ),
-        "Superposition": (
-            "Superposition means a quantum state can be represented "
-            "as a combination of basis states. A Hadamard gate can "
-            "create an equal superposition from |0⟩."
-        ),
-        "Hadamard Gate": (
-            "The Hadamard gate creates an equal superposition from |0⟩: "
-            "H|0⟩ = (|0⟩ + |1⟩)/√2."
-        ),
-        "Entanglement": (
-            "Entanglement creates correlations between quantum systems. "
-            "A Hadamard gate followed by CNOT can demonstrate a Bell state."
-        ),
-        "CNOT Gate": (
-            "CNOT is a controlled-NOT operation. When the control qubit "
-            "is |1⟩, the target qubit is flipped."
-        ),
-        "Measurement": (
-            "Measurement converts quantum information into a classical "
-            "outcome such as 0 or 1. Repeated measurements reveal a "
-            "probability distribution."
-        ),
-        "Quantum Interference": (
-            "Quantum interference occurs when probability amplitudes "
-            "combine constructively or destructively. It is important "
-            "in many quantum algorithms."
-        ),
-        "Quantum Algorithms": (
-            "Quantum algorithms use quantum states, gates, interference "
-            "and measurement to perform computational tasks."
-        )
+        "Qubit": "A qubit is the basic unit of quantum information. Unlike a classical bit, a qubit can be represented using amplitudes for |0⟩ and |1⟩.",
+        "Superposition": "Superposition means a quantum state can be represented as a combination of basis states. Applying a Hadamard gate to |0⟩ creates |+⟩ = (|0⟩ + |1⟩)/√2.",
+        "Entanglement": "Quantum entanglement creates correlations between qubits. A common Bell-state demonstration uses a Hadamard gate followed by CNOT.",
+        "CNOT Gate": "CNOT is a two-qubit controlled operation. The target qubit is flipped when the control qubit is |1⟩.",
+        "Measurement": "Quantum measurement produces a classical outcome from a quantum state. Repeated measurements reveal the probability distribution of outcomes.",
+        "Grover Search": "Grover's algorithm is a quantum search procedure that amplifies the probability of a marked solution in an unstructured search space.",
+        "QFT": "The Quantum Fourier Transform converts quantum amplitudes into a Fourier-like representation and is used in several quantum algorithms."
     }
+    return explanations.get(topic, explanations["Superposition"])
 
-    return explanations.get(topic, explanations["Qubit"])
 
-
-def workflow_build(topic):
-
-    if topic in ["Entanglement", "CNOT Gate"]:
-        qc = QuantumCircuit(2)
+def workflow_build_circuit(topic):
+    if topic == "Entanglement":
+        qc = QuantumCircuit(2, 2)
         qc.h(0)
         qc.cx(0, 1)
-        description = "2-qubit Bell-state circuit: H(Q0) → CNOT(Q0,Q1)"
-
-    elif topic in ["Superposition", "Hadamard Gate", "Measurement"]:
-        qc = QuantumCircuit(1)
-        qc.h(0)
-        description = "1-qubit circuit: H(Q0)"
-
-    elif topic == "Quantum Interference":
-        qc = QuantumCircuit(1)
-        qc.h(0)
-        qc.z(0)
-        qc.h(0)
-        description = "1-qubit interference example: H → Z → H"
-
-    elif topic == "Quantum Algorithms":
-        qc = QuantumCircuit(2)
+        qc.measure([0, 1], [0, 1])
+        return qc
+    if topic == "CNOT Gate":
+        qc = QuantumCircuit(2, 2)
+        qc.x(0)
+        qc.cx(0, 1)
+        qc.measure([0, 1], [0, 1])
+        return qc
+    if topic == "Grover Search":
+        qc = QuantumCircuit(2, 2)
         qc.h([0, 1])
-        qc.cx(0, 1)
-        description = "2-qubit algorithm practice circuit: H → H + CNOT"
-
-    else:
-        qc = QuantumCircuit(1)
-        description = "1-qubit initial circuit"
-
-    return qc, description
-
-
-def workflow_visualize(counts):
-
-    labels = list(counts.keys())
-    values = list(counts.values())
-    total = sum(values) if values else 1
-    probabilities = [v / total for v in values]
-
-    fig, ax = plt.subplots()
-    ax.bar(labels, probabilities)
-    ax.set_ylim(0, 1)
-    ax.set_ylabel("Probability")
-    ax.set_xlabel("Measurement outcome")
-    ax.set_title("Simulation Probability Distribution")
-    return fig, probabilities
+        qc.measure([0, 1], [0, 1])
+        return qc
+    if topic == "QFT":
+        qc = QuantumCircuit(2, 2)
+        qc.h(0)
+        qc.cp(np.pi / 2, 0, 1)
+        qc.h(1)
+        qc.measure([0, 1], [0, 1])
+        return qc
+    qc = QuantumCircuit(1, 1)
+    if topic in ["Superposition", "Measurement"]:
+        qc.h(0)
+    qc.measure(0, 0)
+    return qc
 
 
-def workflow_assessment(topic):
-
-    questions = {
-        "Qubit": (
-            "What is the basic unit of quantum information?",
-            ["Bit", "Qubit", "Byte", "Neuron"],
-            "Qubit"
-        ),
-        "Superposition": (
-            "Which gate can create an equal superposition from |0⟩?",
-            ["X", "Z", "H", "CNOT"],
-            "H"
-        ),
-        "Hadamard Gate": (
-            "What is the main purpose of the Hadamard gate in this demo?",
-            ["Create superposition", "Delete a qubit", "Measure only", "Add a classical bit"],
-            "Create superposition"
-        ),
-        "Entanglement": (
-            "Which combination is commonly used to create a Bell state?",
-            ["X + Z", "H + CNOT", "RX only", "Measurement only"],
-            "H + CNOT"
-        ),
-        "CNOT Gate": (
-            "CNOT primarily acts on how many qubits?",
-            ["One", "Two", "Three", "Zero"],
-            "Two"
-        ),
-        "Measurement": (
-            "What does measurement produce for a computational-basis qubit?",
-            ["A classical outcome", "A new qubit", "A gate", "A circuit diagram"],
-            "A classical outcome"
-        ),
-        "Quantum Interference": (
-            "What combines during quantum interference?",
-            ["Probability amplitudes", "Passwords", "Classical bits", "CPU cores"],
-            "Probability amplitudes"
-        ),
-        "Quantum Algorithms": (
-            "Which element is commonly part of a quantum algorithm?",
-            ["Quantum gates", "Only HTML", "Only databases", "Only sensors"],
-            "Quantum gates"
-        )
-    }
-
-    return questions.get(topic, questions["Qubit"])
+def workflow_next_topic(topic):
+    order = ["Qubit", "Superposition", "Entanglement", "Measurement", "Grover Search", "QFT"]
+    if topic in order and order.index(topic) < len(order) - 1:
+        return order[order.index(topic) + 1]
+    return "Quantum Algorithms"
 
 
-def workflow_next_topic(topic, passed):
-
-    path = {
-        "Qubit": "Superposition",
-        "Superposition": "Hadamard Gate",
-        "Hadamard Gate": "Entanglement",
-        "Entanglement": "CNOT Gate",
-        "CNOT Gate": "Measurement",
-        "Measurement": "Quantum Interference",
-        "Quantum Interference": "Quantum Algorithms",
-        "Quantum Algorithms": "Qubit"
-    }
-
-    if passed:
-        return path.get(topic, "Qubit")
-
-    return topic
-
-
-def run_learning_workflow(user_input):
-
-    # ASK
-    topic = identify_workflow_topic(user_input)
-
-    # EXPLAIN
-    explanation = workflow_explain(topic)
-
-    # BUILD
-    qc, build_description = workflow_build(topic)
-
-    # SIMULATE
-    counts = run_circuit(qc, shots=1024)
-
-    # VISUALIZE
-    fig, probabilities = workflow_visualize(counts)
-
-    question, options, answer = workflow_assessment(topic)
-
-    workflow = {
-        "question": user_input,
-        "topic": topic,
-        "explanation": explanation,
-        "circuit": qc,
-        "build_description": build_description,
-        "counts": counts,
-        "visualization": fig,
-        "probabilities": probabilities,
-        "assessment_question": question,
-        "assessment_options": options,
-        "assessment_answer": answer,
-        "assessment_done": False,
-        "score": None,
-        "next_topic": topic
-    }
-
-    st.session_state.workflow = workflow
-    st.session_state.workflow_topic = topic
-    return workflow
-
-
-# =========================================================
-# INTEGRATED LEARNING WORKFLOW PAGE
-# =========================================================
-
-if page == "🔄 Learning Workflow":
-
-    st.title("🔄 Integrated Quantum Learning Workflow")
-
-    st.write(
-        "ASK → EXPLAIN → BUILD → SIMULATE → VISUALIZE "
-        "→ ASSESS / ADAPT → NEXT LEARNING PATH"
+def render_workflow():
+    st.markdown(
+        '<div class="main-title">⚛️ Quantum LearnLab AI</div>',
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        '<div class="subtitle">Interactive Patent Learning Workflow</div>',
+        unsafe_allow_html=True
     )
 
-    st.caption(
-        "This page connects the existing tutor, circuit, Qiskit simulator, "
-        "visualization, assessment and progress components into one learning loop."
-    )
+    stages = [
+        "ASK", "EXPLAIN", "BUILD", "SIMULATE",
+        "VISUALIZE", "ASSESS / ADAPT", "NEXT LEARNING PATH"
+    ]
+    current = stages.index(st.session_state.workflow_stage)
+    st.progress((current + 1) / len(stages))
 
-    st.divider()
-
-    user_input = st.text_input(
-        "1️⃣ ASK — What do you want to learn?",
-        placeholder="Example: I want to learn superposition",
-        key="workflow_input"
-    )
-
-    if st.button("🚀 Start Learning Workflow", use_container_width=True):
-
-        if not user_input.strip():
-            st.warning("Please enter a learning question or goal.")
-        else:
-            with st.spinner("Running the integrated quantum learning workflow..."):
-                run_learning_workflow(user_input)
-            st.success("Workflow started. Continue through the stages below.")
-
-    workflow = st.session_state.workflow
-
-    if workflow:
-
-        st.divider()
-
-        # 1 ASK
-        st.subheader("1️⃣ ASK")
-        st.info(workflow["question"])
-
-        # 2 EXPLAIN
-        st.subheader("2️⃣ EXPLAIN")
-        st.write(workflow["explanation"])
-        st.caption(f"Detected learning topic: {workflow['topic']}")
-
-        # 3 BUILD
-        st.subheader("3️⃣ BUILD")
-        st.write(workflow["build_description"])
-        try:
-            st.pyplot(draw_circuit(workflow["circuit"]))
-        except Exception:
-            st.code(str(workflow["circuit"]))
-
-        # 4 SIMULATE
-        st.subheader("4️⃣ SIMULATE")
-        st.success("Circuit simulated using the existing Qiskit Aer backend.")
-        st.write("Measurement counts:", workflow["counts"])
-
-        # 5 VISUALIZE
-        st.subheader("5️⃣ VISUALIZE")
-        st.pyplot(workflow["visualization"])
-        st.write("The chart above is generated directly from the simulation counts.")
-
-        # 6 ASSESS / ADAPT
-        st.subheader("6️⃣ ASSESS / ADAPT")
-
-        answer = st.radio(
-            workflow["assessment_question"],
-            workflow["assessment_options"],
-            key="workflow_assessment_answer"
-        )
-
-        if st.button("✅ Submit Assessment", key="workflow_submit_assessment"):
-
-            correct = answer == workflow["assessment_answer"]
-            workflow["assessment_done"] = True
-            workflow["score"] = 1 if correct else 0
-
-            if correct:
-                add_points(15)
-                complete_topic(workflow["topic"])
-                check_badges()
-                st.success("Correct! +15 points")
-            else:
-                add_points(5)
-                check_badges()
-                st.warning(
-                    f"Not quite. Correct answer: {workflow['assessment_answer']}. +5 points"
-                )
-
-            workflow["next_topic"] = workflow_next_topic(
-                workflow["topic"],
-                correct
-            )
-
-            st.session_state.workflow = workflow
-
-        # 7 NEXT LEARNING PATH
-        if workflow.get("assessment_done"):
-
-            st.subheader("7️⃣ NEXT LEARNING PATH")
-
-            if workflow["score"] == 1:
-                st.success(
-                    f"Recommended next topic: {workflow['next_topic']}"
-                )
-            else:
-                st.info(
-                    f"Recommended action: review {workflow['topic']} and try the assessment again."
-                )
-
-            if st.button("➡️ Continue to Next Topic", key="workflow_next_topic"):
-                next_topic = workflow["next_topic"]
-                new_question = f"I want to learn {next_topic}"
-                with st.spinner("Preparing the next learning activity..."):
-                    run_learning_workflow(new_question)
+    cols = st.columns(7)
+    for i, stage in enumerate(stages):
+        with cols[i]:
+            if st.button(stage, key=f"workflow_stage_{i}", use_container_width=True):
+                st.session_state.workflow_stage = stage
                 st.rerun()
 
-            st.divider()
-            st.metric("Current Points", st.session_state.points)
-            st.metric("Topics Completed", len(st.session_state.completed))
+    st.caption(f"Current stage: **{st.session_state.workflow_stage}**")
+    st.divider()
+
+    stage = st.session_state.workflow_stage
+
+    if stage == "ASK":
+        st.subheader("1. ASK — Learner Input")
+        st.write("Enter a quantum question or learning goal.")
+        question = st.text_input(
+            "Your question",
+            value=st.session_state.workflow_question,
+            placeholder="Example: What is superposition?"
+        )
+        if st.button("Submit Question → EXPLAIN", use_container_width=True):
+            if not question.strip():
+                st.warning("Please enter a question.")
+            else:
+                st.session_state.workflow_question = question.strip()
+                st.session_state.workflow_topic = workflow_topic_from_question(question)
+                st.session_state.workflow_explanation = workflow_explain(st.session_state.workflow_topic)
+                st.session_state.workflow_simulation = None
+                st.session_state.workflow_score = None
+                st.session_state.workflow_stage = "EXPLAIN"
+                st.rerun()
+
+    elif stage == "EXPLAIN":
+        st.subheader("2. EXPLAIN — AI Quantum Tutor")
+        if not st.session_state.workflow_question:
+            st.info("Start with ASK and submit a question.")
+        else:
+            st.success(f"Detected topic: **{st.session_state.workflow_topic}**")
+            st.write(st.session_state.workflow_explanation)
+            st.info("Backend role: the learner question is analyzed and mapped to a quantum concept explanation.")
+            if st.button("Continue to BUILD →", use_container_width=True):
+                st.session_state.workflow_stage = "BUILD"
+                st.rerun()
+
+    elif stage == "BUILD":
+        st.subheader("3. BUILD — Quantum Circuit Builder")
+        if not st.session_state.workflow_question:
+            st.info("Start with ASK first.")
+        else:
+            qc = workflow_build_circuit(st.session_state.workflow_topic)
+            st.write(f"Circuit for **{st.session_state.workflow_topic}**")
+            st.pyplot(draw_circuit(qc))
+            st.code(qc.draw(output="text"), language="text")
+            st.info("Backend role: the selected learning concept is converted into an executable quantum circuit.")
+            if st.button("Run SIMULATE →", use_container_width=True):
+                st.session_state.workflow_simulation = run_circuit(qc, shots=512)
+                st.session_state.workflow_stage = "SIMULATE"
+                st.rerun()
+
+    elif stage == "SIMULATE":
+        st.subheader("4. SIMULATE — Quantum Circuit Execution")
+        if st.session_state.workflow_simulation is None:
+            st.info("Build the circuit first.")
+        else:
+            counts = st.session_state.workflow_simulation
+            st.success("Circuit executed using the Qiskit Aer simulator.")
+            st.write("Measurement counts:")
+            st.json(counts)
+            if st.button("Continue to VISUALIZE →", use_container_width=True):
+                st.session_state.workflow_stage = "VISUALIZE"
+                st.rerun()
+
+    elif stage == "VISUALIZE":
+        st.subheader("5. VISUALIZE — Quantum Results")
+        counts = st.session_state.workflow_simulation
+        if not counts:
+            st.info("Run SIMULATE first.")
+        else:
+            df = pd.DataFrame({"State": list(counts.keys()), "Measurements": list(counts.values())})
+            st.bar_chart(df.set_index("State"))
+            total = sum(counts.values())
+            st.write("### Measurement Probabilities")
+            for state, value in counts.items():
+                p = value / total if total else 0
+                st.write(f"**|{state}⟩ — {p * 100:.1f}%**")
+                st.progress(p)
+            if st.button("Continue to ASSESS / ADAPT →", use_container_width=True):
+                st.session_state.workflow_stage = "ASSESS / ADAPT"
+                st.rerun()
+
+    elif stage == "ASSESS / ADAPT":
+        st.subheader("6. ASSESS / ADAPT — Learner Assessment")
+        topic = st.session_state.workflow_topic
+        questions = {
+            "Qubit": ("What is the basic unit of quantum information?", ["Qubit", "Byte", "Pixel"], "Qubit"),
+            "Superposition": ("Which gate is commonly used to create equal superposition from |0⟩?", ["Hadamard (H)", "CNOT", "Z"], "Hadamard (H)"),
+            "Entanglement": ("Which gate is commonly used with H to create a Bell-state circuit?", ["CNOT", "Z", "RX"], "CNOT"),
+            "Measurement": ("What does quantum measurement produce?", ["A classical outcome", "A new qubit", "A password"], "A classical outcome"),
+            "CNOT Gate": ("CNOT is primarily a how-many-qubit operation?", ["Two-qubit", "One-qubit", "Ten-qubit"], "Two-qubit"),
+            "Grover Search": ("Grover's algorithm is mainly associated with which task?", ["Search", "Sorting", "Image editing"], "Search"),
+            "QFT": ("What does QFT stand for?", ["Quantum Fourier Transform", "Quantum Fast Transfer", "Qubit Frequency Tool"], "Quantum Fourier Transform")
+        }
+        q, options, correct = questions.get(topic, questions["Superposition"])
+        answer = st.radio(q, options, key="workflow_assessment_answer")
+        if st.button("Submit Assessment", use_container_width=True):
+            if answer == correct:
+                st.session_state.workflow_score = 100
+                st.session_state.quiz_score = max(st.session_state.quiz_score, 5)
+                st.session_state.points += 20
+                st.success("Correct. Adaptive learning can continue to the next topic.")
+            else:
+                st.session_state.workflow_score = 0
+                st.warning(f"Review {topic} and try the assessment again.")
+            check_badges()
+        if st.session_state.workflow_score is not None:
+            st.metric("Workflow Assessment", f"{st.session_state.workflow_score}%")
+            if st.session_state.workflow_score >= 70:
+                if st.button("Continue to NEXT LEARNING PATH →", use_container_width=True):
+                    st.session_state.workflow_stage = "NEXT LEARNING PATH"
+                    st.rerun()
+
+    elif stage == "NEXT LEARNING PATH":
+        st.subheader("7. NEXT LEARNING PATH")
+        if st.session_state.workflow_score is None:
+            st.info("Complete ASSESS / ADAPT first.")
+        elif st.session_state.workflow_score >= 70:
+            next_topic = workflow_next_topic(st.session_state.workflow_topic)
+            st.success(f"Recommended next learning activity: **{next_topic}**")
+            st.write("The recommendation is based on the current topic and assessment result.")
+            if st.button("Start Recommended Topic →", use_container_width=True):
+                st.session_state.workflow_question = f"Teach me about {next_topic}"
+                st.session_state.workflow_topic = next_topic
+                st.session_state.workflow_explanation = workflow_explain(next_topic)
+                st.session_state.workflow_score = None
+                st.session_state.workflow_stage = "EXPLAIN"
+                st.rerun()
+        else:
+            st.warning("Revisit the current topic and complete the assessment successfully before progressing.")
 
 
 # =========================================================
 # HOME
 # =========================================================
 
-if page == "🏠 Home":
+if page == "🚀 Learning Workflow":
+    render_workflow()
+
+elif page == "🏠 Home":
 
     st.markdown(
         '<div class="main-title">'
@@ -893,8 +781,8 @@ if page == "🏠 Home":
     )
 
     st.write(
-        "ASK → EXPLAIN → BUILD → SIMULATE → "
-        "VISUALIZE → ASSESS/ADAPT → NEXT LEARNING PATH"
+        "Learn → Build → Run → Visualize → "
+        "Ask AI → Fix → Challenge → Track"
     )
 
     st.subheader(
