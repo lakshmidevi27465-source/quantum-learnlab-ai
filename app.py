@@ -9,8 +9,8 @@ import time
 
 from pathlib import Path
 from supabase import create_client
-from qiskit import QuantumCircuit, transpile
-from qiskit_aer import AerSimulator
+#from qiskit import QuantumCircuit, transpile
+#from qiskit_aer import AerSimulator
 
 
 # ============================================================
