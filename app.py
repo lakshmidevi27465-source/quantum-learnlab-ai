@@ -12,13 +12,6 @@ from supabase import create_client
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 
-try:
-    from streamlit_sortables import sort_items
-    SORTABLES_AVAILABLE = True
-except Exception:
-    sort_items = None
-    SORTABLES_AVAILABLE = False
-
 
 # ============================================================
 # PAGE CONFIG
@@ -36,6 +29,7 @@ st.set_page_config(
 # ============================================================
 
 ASSETS_DIR = Path("assets")
+
 FIG_QUBIT = ASSETS_DIR / "fig1_qubit_superposition.png"
 FIG_ENTANGLEMENT = ASSETS_DIR / "fig3_entanglement_teleportation.png"
 FIG_CIRCUIT = ASSETS_DIR / "fig4_hadamard_cnot_circuit.png"
@@ -95,12 +89,15 @@ for key, value in DEFAULT_SESSION_STATE.items():
     if key not in st.session_state:
 
         if isinstance(value, list):
+
             st.session_state[key] = value.copy()
 
         elif isinstance(value, QuantumCircuit):
+
             st.session_state[key] = QuantumCircuit(2)
 
         else:
+
             st.session_state[key] = value
 
 
@@ -113,15 +110,27 @@ def get_supabase():
 
     try:
 
-        url = st.secrets.get("SUPABASE_URL", "")
-        key = st.secrets.get("SUPABASE_KEY", "")
+        url = st.secrets.get(
+            "SUPABASE_URL",
+            ""
+        )
+
+        key = st.secrets.get(
+            "SUPABASE_KEY",
+            ""
+        )
 
         if not url or not key:
+
             return None
 
-        return create_client(url, key)
+        return create_client(
+            url,
+            key
+        )
 
     except Exception:
+
         return None
 
 
@@ -130,26 +139,35 @@ def sign_in(email, password):
     supabase = get_supabase()
 
     if supabase is None:
+
         return False, "Supabase is not configured."
 
     try:
 
-        response = supabase.auth.sign_in_with_password({
-            "email": email,
-            "password": password
-        })
+        response = supabase.auth.sign_in_with_password(
+            {
+                "email": email,
+                "password": password
+            }
+        )
 
         user = response.user
 
         if user:
 
             st.session_state.logged_in = True
+
             st.session_state.user = user
 
-            profile = load_profile(user.id)
+            profile = load_profile(
+                user.id
+            )
 
             if profile:
-                restore_profile(profile)
+
+                restore_profile(
+                    profile
+                )
 
             return True, "Login successful."
 
@@ -160,24 +178,31 @@ def sign_in(email, password):
         return False, str(e)
 
 
-def sign_up(name, email, password):
+def sign_up(
+    name,
+    email,
+    password
+):
 
     supabase = get_supabase()
 
     if supabase is None:
+
         return False, "Supabase is not configured."
 
     try:
 
-        response = supabase.auth.sign_up({
-            "email": email,
-            "password": password,
-            "options": {
-                "data": {
-                    "full_name": name
+        response = supabase.auth.sign_up(
+            {
+                "email": email,
+                "password": password,
+                "options": {
+                    "data": {
+                        "full_name": name
+                    }
                 }
             }
-        })
+        )
 
         if response.user:
 
@@ -200,14 +225,19 @@ def logout():
     try:
 
         if supabase:
+
             supabase.auth.sign_out()
 
     except Exception:
+
         pass
 
     st.session_state.logged_in = False
+
     st.session_state.user = None
+
     st.session_state.profile = {}
+
     st.session_state.page = "🏠 Home"
 
     st.rerun()
@@ -222,6 +252,7 @@ def load_profile(user_id):
     supabase = get_supabase()
 
     if supabase is None:
+
         return {}
 
     try:
@@ -235,11 +266,13 @@ def load_profile(user_id):
         )
 
         if response.data:
+
             return response.data[0]
 
         return {}
 
     except Exception:
+
         return {}
 
 
@@ -250,6 +283,7 @@ def save_profile():
     user = st.session_state.user
 
     if supabase is None or user is None:
+
         return
 
     try:
@@ -257,39 +291,71 @@ def save_profile():
         display_name = ""
 
         try:
-            display_name = user.user_metadata.get("full_name", "")
+
+            display_name = user.user_metadata.get(
+                "full_name",
+                ""
+            )
+
         except Exception:
+
             pass
 
         data = {
+
             "id": user.id,
+
             "name": display_name,
-            "points": int(st.session_state.points),
-            "completed_topics": st.session_state.completed_topics,
-            "badges": st.session_state.badges
+
+            "points": int(
+                st.session_state.points
+            ),
+
+            "completed_topics":
+                st.session_state.completed_topics,
+
+            "badges":
+                st.session_state.badges
         }
 
-        supabase.table("profiles").upsert(data).execute()
+        (
+            supabase
+            .table("profiles")
+            .upsert(data)
+            .execute()
+        )
 
     except Exception:
+
         pass
 
 
 def restore_profile(profile):
 
-    st.session_state.profile = profile or {}
+    st.session_state.profile = (
+        profile or {}
+    )
 
     st.session_state.points = int(
-        profile.get("points", 0)
+        profile.get(
+            "points",
+            0
+        )
     )
 
     st.session_state.completed_topics = (
-        profile.get("completed_topics", [])
+        profile.get(
+            "completed_topics",
+            []
+        )
         or []
     )
 
     st.session_state.badges = (
-        profile.get("badges", [])
+        profile.get(
+            "badges",
+            []
+        )
         or []
     )
 
@@ -301,9 +367,13 @@ def restore_profile(profile):
 @st.cache_resource
 def get_gemini_client():
 
-    api_key = st.secrets.get("GEMINI_API_KEY", "")
+    api_key = st.secrets.get(
+        "GEMINI_API_KEY",
+        ""
+    )
 
     if not api_key:
+
         return None
 
     try:
@@ -313,6 +383,7 @@ def get_gemini_client():
         )
 
     except Exception:
+
         return None
 
 
@@ -320,15 +391,25 @@ def get_gemini_client():
 # GEMINI SAFE GENERATION
 # ============================================================
 
-def generate_gemini(prompt, attempts=3):
+def generate_gemini(
+    prompt,
+    attempts=3
+):
 
     client = get_gemini_client()
 
     if client is None:
-        st.session_state.gemini_last_error = "Gemini client is not configured. Check GEMINI_API_KEY in Streamlit Secrets."
+
+        st.session_state.gemini_last_error = (
+            "Gemini client is not configured. "
+            "Check GEMINI_API_KEY in Streamlit Secrets."
+        )
+
         return None
 
-    last_error = "Unknown Gemini error."
+    last_error = (
+        "Unknown Gemini error."
+    )
 
     for attempt in range(attempts):
 
@@ -339,34 +420,58 @@ def generate_gemini(prompt, attempts=3):
                 contents=prompt
             )
 
-            answer = getattr(response, "text", None)
+            answer = getattr(
+                response,
+                "text",
+                None
+            )
 
             if answer:
+
                 st.session_state.gemini_last_error = ""
+
                 return answer.strip()
 
-            last_error = "Gemini returned an empty response."
+            last_error = (
+                "Gemini returned an empty response."
+            )
 
         except Exception as e:
 
             last_error = str(e)
+
             error_text = last_error.lower()
 
             is_temporary_error = (
+
                 "503" in error_text
+
                 or "unavailable" in error_text
+
                 or "high demand" in error_text
+
                 or "429" in error_text
+
                 or "resource exhausted" in error_text
             )
 
-            if is_temporary_error and attempt < attempts - 1:
-                time.sleep(2 ** attempt)
+            if (
+                is_temporary_error
+                and attempt < attempts - 1
+            ):
+
+                time.sleep(
+                    2 ** attempt
+                )
+
                 continue
 
             break
 
-    st.session_state.gemini_last_error = last_error
+    st.session_state.gemini_last_error = (
+        last_error
+    )
+
     return None
 
 
@@ -379,21 +484,42 @@ def local_topic_detection(question):
     q = question.lower()
 
     if "grover" in q:
+
         return "Grover Search"
 
-    if "fourier" in q or "qft" in q:
+    if (
+        "fourier" in q
+        or "qft" in q
+    ):
+
         return "QFT"
 
-    if "cnot" in q or "controlled not" in q:
+    if (
+        "cnot" in q
+        or "controlled not" in q
+    ):
+
         return "CNOT Gate"
 
-    if "entangle" in q or "bell state" in q:
+    if (
+        "entangle" in q
+        or "bell state" in q
+    ):
+
         return "Entanglement"
 
-    if "superposition" in q or "hadamard" in q:
+    if (
+        "superposition" in q
+        or "hadamard" in q
+    ):
+
         return "Superposition"
 
-    if "measure" in q or "measurement" in q:
+    if (
+        "measure" in q
+        or "measurement" in q
+    ):
+
         return "Measurement"
 
     if (
@@ -401,9 +527,11 @@ def local_topic_detection(question):
         or "quantum circuits" in q
         or "circuit" in q
     ):
+
         return "Quantum Circuit"
 
     if "qubit" in q:
+
         return "Qubit"
 
     return "General"
@@ -416,7 +544,8 @@ def local_topic_detection(question):
 def ask_gemini(question):
 
     prompt = f"""
-You are an AI tutor inside an interactive quantum computing learning platform.
+You are an AI tutor inside an interactive quantum computing
+learning platform.
 
 User question:
 {question}
@@ -432,15 +561,22 @@ Requirements:
 - Focus on quantum computing when the question is about quantum computing.
 """
 
-    answer = generate_gemini(prompt)
+    answer = generate_gemini(
+        prompt
+    )
 
     if answer:
+
         return answer
 
-    error = st.session_state.get("gemini_last_error", "Gemini is temporarily unavailable.")
+    error = st.session_state.get(
+        "gemini_last_error",
+        "Gemini is temporarily unavailable."
+    )
+
     return (
         "### ⚠️ Gemini is temporarily unavailable\n\n"
-        f"The platform could not generate an AI answer right now.\n\n"
+        "The platform could not generate an AI answer right now.\n\n"
         f"**Error:** `{error}`\n\n"
         "Please try the same question again after a short time."
     )
@@ -472,7 +608,9 @@ Question:
 Return ONLY the topic name.
 """
 
-    result = generate_gemini(prompt)
+    result = generate_gemini(
+        prompt
+    )
 
     if result:
 
@@ -481,10 +619,12 @@ Return ONLY the topic name.
         for topic in TOPICS:
 
             if topic.lower() in result_lower:
+
                 return topic
 
-    # Gemini failed → local detection
-    return local_topic_detection(question)
+    return local_topic_detection(
+        question
+    )
 
 
 # ============================================================
@@ -502,6 +642,7 @@ A classical bit can be 0 or 1.
 A qubit can exist in a quantum superposition of 0 and 1.
 
 Example:
+
 |ψ⟩ = α|0⟩ + β|1⟩
 """,
 
@@ -510,6 +651,7 @@ A quantum circuit is a sequence of quantum gates
 applied to one or more qubits.
 
 Main components:
+
 - Qubits
 - Quantum gates
 - Measurement
@@ -537,6 +679,7 @@ When two qubits are entangled, their measurement
 results are correlated.
 
 A Bell state can be created using:
+
 H gate + CNOT gate.
 """,
 
@@ -544,6 +687,7 @@ H gate + CNOT gate.
 CNOT means Controlled-NOT.
 
 It uses:
+
 - One control qubit
 - One target qubit
 
@@ -595,57 +739,65 @@ and provide an introductory quantum circuit example.
 
 def workflow_build_circuit(topic):
 
-    # ----------------------------------------
-    # QUBIT
-    # ----------------------------------------
-
     if topic == "Qubit":
 
-        qc = QuantumCircuit(1, 1)
+        qc = QuantumCircuit(
+            1,
+            1
+        )
 
-        qc.measure(0, 0)
+        qc.measure(
+            0,
+            0
+        )
 
         return qc
-
-    # ----------------------------------------
-    # QUANTUM CIRCUIT
-    # ----------------------------------------
 
     if topic == "Quantum Circuit":
 
-        qc = QuantumCircuit(1, 1)
+        qc = QuantumCircuit(
+            1,
+            1
+        )
 
         qc.h(0)
 
-        qc.measure(0, 0)
+        qc.measure(
+            0,
+            0
+        )
 
         return qc
-
-    # ----------------------------------------
-    # SUPERPOSITION
-    # ----------------------------------------
 
     if topic == "Superposition":
 
-        qc = QuantumCircuit(1, 1)
+        qc = QuantumCircuit(
+            1,
+            1
+        )
 
         qc.h(0)
 
-        qc.measure(0, 0)
+        qc.measure(
+            0,
+            0
+        )
 
         return qc
-
-    # ----------------------------------------
-    # ENTANGLEMENT
-    # ----------------------------------------
 
     if topic == "Entanglement":
 
-        qc = QuantumCircuit(2, 2)
+        qc = QuantumCircuit(
+            2,
+            2
+        )
 
         qc.h(0)
 
-        qc.cx(0, 1)
+        qc.cx(
+            0,
+            1
+        )
 
         qc.measure(
             [0, 1],
@@ -653,18 +805,20 @@ def workflow_build_circuit(topic):
         )
 
         return qc
-
-    # ----------------------------------------
-    # CNOT
-    # ----------------------------------------
 
     if topic == "CNOT Gate":
 
-        qc = QuantumCircuit(2, 2)
+        qc = QuantumCircuit(
+            2,
+            2
+        )
 
         qc.x(0)
 
-        qc.cx(0, 1)
+        qc.cx(
+            0,
+            1
+        )
 
         qc.measure(
             [0, 1],
@@ -673,27 +827,28 @@ def workflow_build_circuit(topic):
 
         return qc
 
-    # ----------------------------------------
-    # MEASUREMENT
-    # ----------------------------------------
-
     if topic == "Measurement":
 
-        qc = QuantumCircuit(1, 1)
+        qc = QuantumCircuit(
+            1,
+            1
+        )
 
         qc.h(0)
 
-        qc.measure(0, 0)
+        qc.measure(
+            0,
+            0
+        )
 
         return qc
 
-    # ----------------------------------------
-    # GROVER DEMO
-    # ----------------------------------------
-
     if topic == "Grover Search":
 
-        qc = QuantumCircuit(2, 2)
+        qc = QuantumCircuit(
+            2,
+            2
+        )
 
         qc.h(0)
 
@@ -706,13 +861,12 @@ def workflow_build_circuit(topic):
 
         return qc
 
-    # ----------------------------------------
-    # QFT DEMO
-    # ----------------------------------------
-
     if topic == "QFT":
 
-        qc = QuantumCircuit(2, 2)
+        qc = QuantumCircuit(
+            2,
+            2
+        )
 
         qc.h(0)
 
@@ -731,15 +885,17 @@ def workflow_build_circuit(topic):
 
         return qc
 
-    # ----------------------------------------
-    # GENERAL FALLBACK
-    # ----------------------------------------
-
-    qc = QuantumCircuit(1, 1)
+    qc = QuantumCircuit(
+        1,
+        1
+    )
 
     qc.h(0)
 
-    qc.measure(0, 0)
+    qc.measure(
+        0,
+        0
+    )
 
     return qc
 
@@ -748,7 +904,10 @@ def workflow_build_circuit(topic):
 # SIMULATE CIRCUIT
 # ============================================================
 
-def simulate_circuit(qc, shots=512):
+def simulate_circuit(
+    qc,
+    shots=512
+):
 
     try:
 
@@ -783,105 +942,115 @@ def simulate_circuit(qc, shots=512):
 
 def render_circuit_builder():
 
-    st.title("🔧 Circuit Builder")
-    st.write("Drag gates from the Gate Palette into the Circuit area. Reorder them to change the circuit sequence.")
-
-    num_qubits = st.number_input("Number of qubits", min_value=1, max_value=8, value=2, step=1)
-    shots = st.number_input("Shots", min_value=1, max_value=10000, value=512, step=1)
-
-    if "drag_gate_sequence" not in st.session_state:
-        st.session_state.drag_gate_sequence = []
-    if "builder_counts" not in st.session_state:
-        st.session_state.builder_counts = None
-
-    gates = ["H", "X", "Y", "Z", "S", "T", "CNOT", "CZ", "SWAP"]
-
-    if not SORTABLES_AVAILABLE:
-        st.error("Drag-and-drop component is not installed. Add streamlit-sortables==0.3.1 to requirements.txt.")
-        return
-
-    result = sort_items(
-        [
-            {"header": "🧩 Gate Palette", "items": gates},
-            {"header": "⚛️ Circuit — drag gates here", "items": st.session_state.drag_gate_sequence},
-        ],
-        multi_containers=True,
-        direction="horizontal",
-        key="quantum_gate_drag_drop",
+    st.title(
+        "🔧 Circuit Builder"
     )
 
-    if isinstance(result, list) and len(result) >= 2:
-        circuit_items = result[1].get("items", []) if isinstance(result[1], dict) else []
-        st.session_state.drag_gate_sequence = [g for g in circuit_items if g in gates]
+    st.write(
+        "Build a quantum circuit by selecting gates, "
+        "then simulate the circuit."
+    )
 
-    seq = st.session_state.drag_gate_sequence
+    num_qubits = st.number_input(
+        "Number of qubits",
+        min_value=1,
+        max_value=8,
+        value=2,
+        step=1
+    )
 
-    st.subheader("Current Gate Sequence")
-    st.info(" → ".join(seq) if seq else "Drag gates into the circuit area to begin.")
+    shots = st.number_input(
+        "Shots",
+        min_value=1,
+        max_value=10000,
+        value=512,
+        step=1
+    )
 
-    qc = QuantumCircuit(int(num_qubits), int(num_qubits))
+    if "builder_counts" not in st.session_state:
 
-    for gate in seq:
-        if gate == "H":
-            qc.h(0)
-        elif gate == "X":
-            qc.x(0)
-        elif gate == "Y":
-            qc.y(0)
-        elif gate == "Z":
-            qc.z(0)
-        elif gate == "S":
-            qc.s(0)
-        elif gate == "T":
-            qc.t(0)
-        elif int(num_qubits) >= 2:
-            if gate == "CNOT":
-                qc.cx(0, 1)
-            elif gate == "CZ":
-                qc.cz(0, 1)
-            elif gate == "SWAP":
-                qc.swap(0, 1)
+        st.session_state.builder_counts = None
 
-    st.subheader("⚛️ Circuit Diagram")
-    st.code(str(qc.draw(output="text")), language="text")
+    gates = [
+        "H",
+        "X",
+        "Y",
+        "Z",
+        "S",
+        "T",
+        "CNOT",
+        "CZ",
+        "SWAP"
+    ]
 
-    explanations = {
-        "H": "Creates superposition.",
-        "X": "Flips |0⟩ and |1⟩.",
-        "Y": "Performs a bit flip together with a phase change.",
-        "Z": "Changes the phase of |1⟩.",
-        "S": "Applies a π/2 phase shift.",
-        "T": "Applies a π/4 phase shift.",
-        "CNOT": "Flips the target qubit when the control qubit is |1⟩.",
-        "CZ": "Applies a phase flip to the |11⟩ component.",
-        "SWAP": "Exchanges the states of two qubits."
-    }
+    st.subheader(
+        "🧩 Gate Selection"
+    )
 
-    st.subheader("📘 Circuit Explanation")
-    if seq:
-        for i, gate in enumerate(seq, 1):
-            st.write(f"**Step {i} — {gate}:** {explanations[gate]}")
-    else:
-        st.caption("No gates selected yet.")
+    selected_gate = st.selectbox(
+        "Select a quantum gate",
+        gates
+    )
 
-    c1, c2 = st.columns(2)
-    with c1:
-        if st.button("▶️ Simulate Circuit", width="stretch"):
-            st.session_state.builder_counts = simulate_circuit(qc, int(shots))
-    with c2:
-        if st.button("🗑️ Clear Circuit", width="stretch"):
-            st.session_state.drag_gate_sequence = []
-            st.session_state.builder_counts = None
+    if "builder_gate_sequence" not in st.session_state:
+
+        st.session_state.builder_gate_sequence = []
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        if st.button(
+            "➕ Add Gate"
+        ):
+
+            st.session_state.builder_gate_sequence.append(
+                selected_gate
+            )
+
             st.rerun()
 
-    if st.session_state.builder_counts:
-        st.subheader("📊 Simulation Result")
-        st.json(st.session_state.builder_counts)
+    with col2:
 
+        if st.button(
+            "🗑️ Clear Circuit"
+        ):
+
+            st.session_state.builder_gate_sequence = []
+
+            st.session_state.builder_counts = None
+
+            st.rerun()
+
+    st.subheader(
+        "⚛️ Circuit"
+    )
+
+    if st.session_state.builder_gate_sequence:
+
+        st.write(
+            " → ".join(
+                st.session_state.builder_gate_sequence
+            )
+        )
+
+    else:
+
+        st.info(
+            "No gates added yet. "
+            "Select a gate and click Add Gate."
+        )
+
+
+# ============================================================
+# FIX MY CIRCUIT
+# ============================================================
 
 def render_fix_circuit():
 
-    st.title("🛠️ Fix My Circuit")
+    st.title(
+        "🛠️ Fix My Circuit"
+    )
 
     st.write(
         "Describe your circuit problem and the AI tutor "
@@ -923,11 +1092,15 @@ Give:
 4. Simple Qiskit example
 """
 
-        answer = generate_gemini(prompt)
+        answer = generate_gemini(
+            prompt
+        )
 
         if answer:
 
-            st.markdown(answer)
+            st.markdown(
+                answer
+            )
 
         else:
 
@@ -943,7 +1116,9 @@ Give:
 
 def render_ai_tutor():
 
-    st.title("🤖 AI Tutor")
+    st.title(
+        "🤖 AI Tutor"
+    )
 
     question = st.text_area(
         "Ask any quantum computing question",
@@ -967,13 +1142,17 @@ def render_ai_tutor():
 
             return
 
-        answer = ask_gemini(question)
+        answer = ask_gemini(
+            question
+        )
 
         st.session_state.ai_answer = answer
 
     if st.session_state.ai_answer:
 
-        st.subheader("AI Answer")
+        st.subheader(
+            "AI Answer"
+        )
 
         st.markdown(
             st.session_state.ai_answer
@@ -986,7 +1165,9 @@ def render_ai_tutor():
 
 def render_visualization():
 
-    st.title("📊 Visualization")
+    st.title(
+        "📊 Visualization"
+    )
 
     qc = st.session_state.get(
         "workflow_circuit"
@@ -1004,19 +1185,32 @@ def render_visualization():
 
         return
 
-    st.subheader("Quantum Circuit")
+    st.subheader(
+        "Quantum Circuit"
+    )
 
     st.code(
-        str(qc.draw(output="text")),
+        str(
+            qc.draw(
+                output="text"
+            )
+        ),
         language="text"
     )
 
     if counts:
 
-        st.subheader("Measurement Distribution")
+        st.subheader(
+            "Measurement Distribution"
+        )
 
-        states = list(counts.keys())
-        values = list(counts.values())
+        states = list(
+            counts.keys()
+        )
+
+        values = list(
+            counts.values()
+        )
 
         fig, ax = plt.subplots()
 
@@ -1049,69 +1243,93 @@ def render_visualization():
 QUIZ_DATA = [
 
     {
-        "question": "What is the basic unit of quantum information?",
+        "question":
+            "What is the basic unit of quantum information?",
+
         "options": [
             "Bit",
             "Qubit",
             "Byte",
             "Register"
         ],
-        "answer": "Qubit"
+
+        "answer":
+            "Qubit"
     },
 
     {
-        "question": "Which gate is commonly used to create superposition?",
+        "question":
+            "Which gate is commonly used to create superposition?",
+
         "options": [
             "X",
             "Z",
             "H",
             "CX"
         ],
-        "answer": "H"
+
+        "answer":
+            "H"
     },
 
     {
-        "question": "Which gate is used to create two-qubit entanglement?",
+        "question":
+            "Which gate is used to create two-qubit entanglement?",
+
         "options": [
             "CNOT",
             "X",
             "Z",
             "T"
         ],
-        "answer": "CNOT"
+
+        "answer":
+            "CNOT"
     },
 
     {
-        "question": "What does QFT stand for?",
+        "question":
+            "What does QFT stand for?",
+
         "options": [
             "Quantum Fast Technology",
             "Quantum Fourier Transform",
             "Quantum Function Theory",
             "Quantum Frequency Tool"
         ],
-        "answer": "Quantum Fourier Transform"
+
+        "answer":
+            "Quantum Fourier Transform"
     },
 
     {
-        "question": "What happens during quantum measurement?",
+        "question":
+            "What happens during quantum measurement?",
+
         "options": [
             "Quantum state becomes a classical result",
             "Qubit disappears",
             "Computer shuts down",
             "Nothing happens"
         ],
-        "answer": "Quantum state becomes a classical result"
+
+        "answer":
+            "Quantum state becomes a classical result"
     }
 ]
 
 
 def render_quiz():
 
-    st.title("📝 Quantum Quiz")
+    st.title(
+        "📝 Quantum Quiz"
+    )
 
     score = 0
 
-    for i, item in enumerate(QUIZ_DATA):
+    for i, item in enumerate(
+        QUIZ_DATA
+    ):
 
         st.subheader(
             f"Q{i + 1}. {item['question']}"
@@ -1124,6 +1342,7 @@ def render_quiz():
         )
 
         if answer == item["answer"]:
+
             score += 1
 
     if st.button(
@@ -1139,7 +1358,10 @@ def render_quiz():
 
         if score == len(QUIZ_DATA):
 
-            if "Quantum Master" not in st.session_state.badges:
+            if (
+                "Quantum Master"
+                not in st.session_state.badges
+            ):
 
                 st.session_state.badges.append(
                     "Quantum Master"
@@ -1162,7 +1384,9 @@ def render_quiz():
 
 def render_learn():
 
-    st.title("📚 Learn Quantum Computing")
+    st.title(
+        "📚 Learn Quantum Computing"
+    )
 
     topic = st.selectbox(
         "Choose a topic",
@@ -1170,7 +1394,9 @@ def render_learn():
     )
 
     st.markdown(
-        workflow_explain(topic)
+        workflow_explain(
+            topic
+        )
     )
 
     st.divider()
@@ -1185,7 +1411,11 @@ def render_learn():
         )
 
         st.code(
-            str(qc.draw(output="text")),
+            str(
+                qc.draw(
+                    output="text"
+                )
+            ),
             language="text"
         )
 
@@ -1199,10 +1429,15 @@ def render_learn():
             st.bar_chart(
                 pd.DataFrame(
                     {
-                        "State": list(counts.keys()),
-                        "Count": list(counts.values())
+                        "State":
+                            list(counts.keys()),
+
+                        "Count":
+                            list(counts.values())
                     }
-                ).set_index("State")
+                ).set_index(
+                    "State"
+                )
             )
 
 
@@ -1212,94 +1447,268 @@ def render_learn():
 
 def render_algorithms():
 
-    st.title("🧠 Quantum Algorithms")
+    st.title(
+        "🧠 Quantum Algorithms"
+    )
 
     algorithm = st.selectbox(
         "Select algorithm",
-        ["Grover Search", "QFT", "VQE", "QAOA"]
+        [
+            "Grover Search",
+            "QFT",
+            "VQE",
+            "QAOA"
+        ]
     )
 
     info = {
+
         "Grover Search": (
-            "Grover's algorithm searches an unstructured space and ideally uses about O(√N) oracle queries.",
+            "Grover's algorithm searches an unstructured space "
+            "and ideally uses about O(√N) oracle queries.",
+
             "H → Oracle → Diffusion → Measurement",
-            "The H gates create a search-space superposition. The oracle marks the target state, and the diffusion step amplifies its probability.",
+
+            "The H gates create a search-space superposition. "
+            "The oracle marks the target state, and the "
+            "diffusion step amplifies its probability.",
+
             FIG_CIRCUIT
         ),
+
         "QFT": (
-            "The Quantum Fourier Transform changes a quantum state into the Fourier basis and is used inside several quantum algorithms.",
+            "The Quantum Fourier Transform changes a quantum "
+            "state into the Fourier basis and is used inside "
+            "several quantum algorithms.",
+
             "H → Controlled Phase → H → SWAP → Measurement",
-            "Hadamard gates create the Fourier components, controlled-phase operations add relative phase information, and SWAP reverses qubit order when required.",
+
+            "Hadamard gates create the Fourier components, "
+            "controlled-phase operations add relative phase "
+            "information, and SWAP reverses qubit order "
+            "when required.",
+
             FIG_CIRCUIT
         ),
+
         "VQE": (
-            "VQE is a hybrid quantum-classical algorithm used to estimate an objective such as molecular energy.",
-            "Parameterized Ansatz → Measurement → Classical Optimizer",
-            "The quantum circuit prepares a parameterized state. Measurements estimate the objective, and a classical optimizer updates the parameters.",
+            "VQE is a hybrid quantum-classical algorithm "
+            "used to estimate an objective such as "
+            "molecular energy.",
+
+            "Parameterized Ansatz → Measurement → "
+            "Classical Optimizer",
+
+            "The quantum circuit prepares a parameterized "
+            "state. Measurements estimate the objective, "
+            "and a classical optimizer updates the parameters.",
+
             FIG_ENTANGLEMENT
         ),
+
         "QAOA": (
-            "QAOA is a hybrid quantum-classical method for approximate combinatorial optimization.",
+            "QAOA is a hybrid quantum-classical method "
+            "for approximate combinatorial optimization.",
+
             "Initial State → Cost Layer → Mixer → Measurement",
-            "The cost layer encodes the optimization objective, the mixer explores candidate states, and a classical optimizer updates the circuit parameters.",
+
+            "The cost layer encodes the optimization objective, "
+            "the mixer explores candidate states, and a "
+            "classical optimizer updates the circuit parameters.",
+
             FIG_CIRCUIT
-        ),
+        )
     }
 
-    explanation, flow, circuit_explanation, figure = info[algorithm]
+    explanation, flow, circuit_explanation, figure = info[
+        algorithm
+    ]
 
-    st.subheader("📖 Algorithm Explanation")
-    st.write(explanation)
+    st.subheader(
+        "📖 Algorithm Explanation"
+    )
+
+    st.write(
+        explanation
+    )
 
     if figure.exists():
-        st.subheader("🖼️ Existing Figure")
-        st.image(str(figure), width="stretch")
 
-    st.subheader("🔗 Algorithm Flow")
-    st.info(flow)
+        st.subheader(
+            "🖼️ Existing Figure"
+        )
+
+        st.image(
+            str(figure),
+            width="stretch"
+        )
+
+    st.subheader(
+        "🔗 Algorithm Flow"
+    )
+
+    st.info(
+        flow
+    )
 
     if algorithm == "Grover Search":
-        qc = QuantumCircuit(2, 2)
-        qc.h([0, 1])
-        qc.cz(0, 1)
-        qc.h([0, 1])
-        qc.measure([0, 1], [0, 1])
+
+        qc = QuantumCircuit(
+            2,
+            2
+        )
+
+        qc.h(
+            [0, 1]
+        )
+
+        qc.cz(
+            0,
+            1
+        )
+
+        qc.h(
+            [0, 1]
+        )
+
+        qc.measure(
+            [0, 1],
+            [0, 1]
+        )
+
     elif algorithm == "QFT":
-        qc = QuantumCircuit(2, 2)
+
+        qc = QuantumCircuit(
+            2,
+            2
+        )
+
         qc.h(0)
-        qc.cp(np.pi / 2, 0, 1)
+
+        qc.cp(
+            np.pi / 2,
+            0,
+            1
+        )
+
         qc.h(1)
-        qc.swap(0, 1)
-        qc.measure([0, 1], [0, 1])
+
+        qc.swap(
+            0,
+            1
+        )
+
+        qc.measure(
+            [0, 1],
+            [0, 1]
+        )
+
     elif algorithm == "VQE":
-        qc = QuantumCircuit(2, 2)
-        qc.ry(np.pi / 4, 0)
-        qc.cx(0, 1)
-        qc.measure([0, 1], [0, 1])
+
+        qc = QuantumCircuit(
+            2,
+            2
+        )
+
+        qc.ry(
+            np.pi / 4,
+            0
+        )
+
+        qc.cx(
+            0,
+            1
+        )
+
+        qc.measure(
+            [0, 1],
+            [0, 1]
+        )
+
     else:
-        qc = QuantumCircuit(2, 2)
-        qc.h([0, 1])
-        qc.rzz(np.pi / 4, 0, 1)
-        qc.rx(np.pi / 4, 0)
-        qc.rx(np.pi / 4, 1)
-        qc.measure([0, 1], [0, 1])
 
-    st.subheader("⚛️ Circuit")
-    st.code(str(qc.draw(output="text")), language="text")
+        qc = QuantumCircuit(
+            2,
+            2
+        )
 
-    st.subheader("🧩 Circuit Explanation")
-    st.write(circuit_explanation)
+        qc.h(
+            [0, 1]
+        )
 
-    if st.button("▶️ Simulate Algorithm Circuit", width="stretch", key=f"algo_sim_{algorithm}"):
-        counts = simulate_circuit(qc, 512)
+        qc.rzz(
+            np.pi / 4,
+            0,
+            1
+        )
+
+        qc.rx(
+            np.pi / 4,
+            0
+        )
+
+        qc.rx(
+            np.pi / 4,
+            1
+        )
+
+        qc.measure(
+            [0, 1],
+            [0, 1]
+        )
+
+    st.subheader(
+        "⚛️ Circuit"
+    )
+
+    st.code(
+        str(
+            qc.draw(
+                output="text"
+            )
+        ),
+        language="text"
+    )
+
+    st.subheader(
+        "🧩 Circuit Explanation"
+    )
+
+    st.write(
+        circuit_explanation
+    )
+
+    if st.button(
+        "▶️ Simulate Algorithm Circuit",
+        width="stretch",
+        key=f"algo_sim_{algorithm}"
+    ):
+
+        counts = simulate_circuit(
+            qc,
+            512
+        )
+
         if counts:
-            st.subheader("📊 Simulation Result")
-            st.json(counts)
 
+            st.subheader(
+                "📊 Simulation Result"
+            )
+
+            st.json(
+                counts
+            )
+
+
+# ============================================================
+# QISKIT CODE EDITOR
+# ============================================================
 
 def render_code_editor():
 
-    st.title("💻 Qiskit Code Editor")
+    st.title(
+        "💻 Qiskit Code Editor"
+    )
 
     default_code = """from qiskit import QuantumCircuit
 
@@ -1354,11 +1763,15 @@ def render_workflow():
         "NEXT LEARNING PATH"
     ]
 
-    current_stage = st.session_state.workflow_stage
+    current_stage = (
+        st.session_state.workflow_stage
+    )
 
     st.progress(
         (
-            stages.index(current_stage) + 1
+            stages.index(
+                current_stage
+            ) + 1
         ) / len(stages)
     )
 
@@ -1439,7 +1852,9 @@ def render_workflow():
             "2️⃣ EXPLAIN"
         )
 
-        topic = st.session_state.workflow_topic
+        topic = (
+            st.session_state.workflow_topic
+        )
 
         st.info(
             f"Detected Topic: {topic}"
@@ -1456,7 +1871,9 @@ def render_workflow():
         )
 
         st.markdown(
-            workflow_explain(topic)
+            workflow_explain(
+                topic
+            )
         )
 
         if st.button(
@@ -1468,7 +1885,9 @@ def render_workflow():
                 topic
             )
 
-            st.session_state.workflow_circuit = qc
+            st.session_state.workflow_circuit = (
+                qc
+            )
 
             st.session_state.workflow_stage = (
                 "BUILD"
@@ -1486,7 +1905,9 @@ def render_workflow():
             "3️⃣ BUILD"
         )
 
-        qc = st.session_state.workflow_circuit
+        qc = (
+            st.session_state.workflow_circuit
+        )
 
         if qc is None:
 
@@ -1494,10 +1915,16 @@ def render_workflow():
                 st.session_state.workflow_topic
             )
 
-            st.session_state.workflow_circuit = qc
+            st.session_state.workflow_circuit = (
+                qc
+            )
 
         st.code(
-            str(qc.draw(output="text")),
+            str(
+                qc.draw(
+                    output="text"
+                )
+            ),
             language="text"
         )
 
@@ -1527,7 +1954,9 @@ def render_workflow():
             "4️⃣ SIMULATE"
         )
 
-        qc = st.session_state.workflow_circuit
+        qc = (
+            st.session_state.workflow_circuit
+        )
 
         if qc is None:
 
@@ -1592,12 +2021,20 @@ def render_workflow():
             "5️⃣ VISUALIZE"
         )
 
-        qc = st.session_state.workflow_circuit
+        qc = (
+            st.session_state.workflow_circuit
+        )
 
-        counts = st.session_state.workflow_simulation
+        counts = (
+            st.session_state.workflow_simulation
+        )
 
         st.code(
-            str(qc.draw(output="text")),
+            str(
+                qc.draw(
+                    output="text"
+                )
+            ),
             language="text"
         )
 
@@ -1622,9 +2059,13 @@ def render_workflow():
                 "Quantum Measurement Distribution"
             )
 
-            st.pyplot(fig)
+            st.pyplot(
+                fig
+            )
 
-            plt.close(fig)
+            plt.close(
+                fig
+            )
 
         if st.button(
             "Continue to ASSESS / ADAPT →",
@@ -1647,91 +2088,138 @@ def render_workflow():
             "6️⃣ ASSESS / ADAPT"
         )
 
-        topic = st.session_state.workflow_topic
+        topic = (
+            st.session_state.workflow_topic
+        )
 
         questions = {
 
             "Qubit": {
-                "question": "What is the basic unit of quantum information?",
-                "options": ["Bit", "Qubit", "Byte", "CPU"],
-                "answer": "Qubit"
+                "question":
+                    "What is the basic unit of quantum information?",
+
+                "options":
+                    [
+                        "Bit",
+                        "Qubit",
+                        "Byte",
+                        "CPU"
+                    ],
+
+                "answer":
+                    "Qubit"
             },
 
             "Quantum Circuit": {
-                "question": "What is a quantum circuit?",
-                "options": [
-                    "A sequence of quantum operations",
-                    "A classical database",
-                    "A computer memory",
-                    "A compiler"
-                ],
-                "answer": "A sequence of quantum operations"
+                "question":
+                    "What is a quantum circuit?",
+
+                "options":
+                    [
+                        "A sequence of quantum operations",
+                        "A classical database",
+                        "A computer memory",
+                        "A compiler"
+                    ],
+
+                "answer":
+                    "A sequence of quantum operations"
             },
 
             "Superposition": {
-                "question": "Which gate commonly creates superposition?",
-                "options": [
-                    "X",
-                    "H",
-                    "Z",
-                    "CNOT"
-                ],
-                "answer": "H"
+                "question":
+                    "Which gate commonly creates superposition?",
+
+                "options":
+                    [
+                        "X",
+                        "H",
+                        "Z",
+                        "CNOT"
+                    ],
+
+                "answer":
+                    "H"
             },
 
             "Entanglement": {
-                "question": "Which combination can create a Bell state?",
-                "options": [
-                    "H + CNOT",
-                    "X + X",
-                    "Z + Z",
-                    "H + X"
-                ],
-                "answer": "H + CNOT"
+                "question":
+                    "Which combination can create a Bell state?",
+
+                "options":
+                    [
+                        "H + CNOT",
+                        "X + X",
+                        "Z + Z",
+                        "H + X"
+                    ],
+
+                "answer":
+                    "H + CNOT"
             },
 
             "CNOT Gate": {
-                "question": "What does CNOT use?",
-                "options": [
-                    "Control and target qubits",
-                    "Only one qubit",
-                    "Only classical bits",
-                    "No qubits"
-                ],
-                "answer": "Control and target qubits"
+                "question":
+                    "What does CNOT use?",
+
+                "options":
+                    [
+                        "Control and target qubits",
+                        "Only one qubit",
+                        "Only classical bits",
+                        "No qubits"
+                    ],
+
+                "answer":
+                    "Control and target qubits"
             },
 
             "Measurement": {
-                "question": "Measurement produces what?",
-                "options": [
-                    "Classical result",
-                    "New qubit",
-                    "New gate",
-                    "Nothing"
-                ],
-                "answer": "Classical result"
+                "question":
+                    "Measurement produces what?",
+
+                "options":
+                    [
+                        "Classical result",
+                        "New qubit",
+                        "New gate",
+                        "Nothing"
+                    ],
+
+                "answer":
+                    "Classical result"
             },
 
             "Grover Search": {
-                "question": "What is Grover's approximate query complexity?",
-                "options": [
-                    "O(N)",
-                    "O(√N)",
-                    "O(N²)",
-                    "O(log N)"
-                ],
-                "answer": "O(√N)"
+                "question":
+                    "What is Grover's approximate query complexity?",
+
+                "options":
+                    [
+                        "O(N)",
+                        "O(√N)",
+                        "O(N²)",
+                        "O(log N)"
+                    ],
+
+                "answer":
+                    "O(√N)"
             },
 
             "QFT": {
-                "question": "What does QFT stand for?",
-                "options": [
-                    "Quantum Fourier Transform",
-                    "Quantum Fast Transfer",
-                    "Quantum Function Table",
-                    "Quantum Frequency Theory"
-                ],
-                "answer": "Quantum Fourier Transform"
+                "question":
+                    "What does QFT stand for?",
+
+                "options":
+                    [
+                        "Quantum Fourier Transform",
+                        "Quantum Fast Transfer",
+                        "Quantum Function Table",
+                        "Quantum Frequency Theory"
+                    ],
+
+                "answer":
+                    "Quantum Fourier Transform"
             }
         }
 
@@ -1761,7 +2249,10 @@ def render_workflow():
 
                 st.session_state.points += 20
 
-                if topic not in st.session_state.completed_topics:
+                if (
+                    topic
+                    not in st.session_state.completed_topics
+                ):
 
                     st.session_state.completed_topics.append(
                         topic
@@ -1775,13 +2266,21 @@ def render_workflow():
                     f"Correct answer: {qdata['answer']}"
                 )
 
-            st.session_state.workflow_score = score
+            st.session_state.workflow_score = (
+                score
+            )
 
             save_profile()
 
-        if st.session_state.workflow_score is not None:
+        if (
+            st.session_state.workflow_score
+            is not None
+        ):
 
-            if st.session_state.workflow_score >= 70:
+            if (
+                st.session_state.workflow_score
+                >= 70
+            ):
 
                 st.info(
                     "Good performance. You can move "
@@ -1821,13 +2320,16 @@ def render_workflow():
         )
 
         topic_index = (
-            TOPICS.index(current_topic)
+            TOPICS.index(
+                current_topic
+            )
             if current_topic in TOPICS
             else 0
         )
 
         next_topic = TOPICS[
-            (topic_index + 1) % len(TOPICS)
+            (topic_index + 1)
+            % len(TOPICS)
         ]
 
         score = (
@@ -1858,7 +2360,9 @@ def render_workflow():
             width="stretch"
         ):
 
-            st.session_state.workflow_stage = "ASK"
+            st.session_state.workflow_stage = (
+                "ASK"
+            )
 
             st.session_state.workflow_question = ""
 
@@ -1901,9 +2405,11 @@ def render_home():
             )
 
         except Exception:
+
             display_name = ""
 
         if not display_name:
+
             display_name = user.email
 
     st.success(
@@ -1961,9 +2467,9 @@ Learn quantum computing through:
 
     st.info(
         "Gemini 3.6 Flash powers the AI tutor. "
-        "If Gemini is temporarily unavailable, "
-        "the platform uses local fallback explanations "
-        "and circuit generation."
+        "If the Gemini API is temporarily unavailable, "
+        "the platform displays a temporary-unavailable "
+        "message and asks the user to try again."
     )
 
 
@@ -1995,7 +2501,9 @@ def render_progress():
 
     if st.session_state.completed_topics:
 
-        for topic in st.session_state.completed_topics:
+        for topic in (
+            st.session_state.completed_topics
+        ):
 
             st.success(
                 f"✅ {topic}"
@@ -2013,7 +2521,9 @@ def render_progress():
 
     if st.session_state.badges:
 
-        for badge in st.session_state.badges:
+        for badge in (
+            st.session_state.badges
+        ):
 
             st.write(
                 f"🏅 {badge}"
@@ -2109,7 +2619,9 @@ def render_auth():
                         message
                     )
 
-                    time.sleep(0.5)
+                    time.sleep(
+                        0.5
+                    )
 
                     st.rerun()
 
@@ -2152,7 +2664,11 @@ def render_auth():
             width="stretch"
         ):
 
-            if not name or not email or not password:
+            if (
+                not name
+                or not email
+                or not password
+            ):
 
                 st.warning(
                     "Please fill all fields."
@@ -2210,29 +2726,42 @@ def render_sidebar():
         st.divider()
 
         pages = [
+
             "🏠 Home",
+
             "🔄 Learning Workflow",
+
             "📚 Learn",
-            "📖 Gate Learning",
+
             "🔧 Circuit Builder",
+
             "🧠 Quantum Algorithms",
+
             "📊 Visualization",
+
             "💻 Qiskit Code Editor",
+
             "🛠️ Fix My Circuit",
+
             "🤖 AI Tutor",
+
             "📝 Quiz",
+
             "📈 Progress",
+
             "🏆 Leaderboard"
         ]
 
         selected = st.radio(
             "Navigation",
             pages,
-            index=pages.index(
-                st.session_state.page
+            index=(
+                pages.index(
+                    st.session_state.page
+                )
+                if st.session_state.page in pages
+                else 0
             )
-            if st.session_state.page in pages
-            else 0
         )
 
         st.session_state.page = selected
@@ -2240,7 +2769,8 @@ def render_sidebar():
         st.divider()
 
         st.write(
-            f"⭐ Points: {st.session_state.points}"
+            f"⭐ Points: "
+            f"{st.session_state.points}"
         )
 
         if st.button(
