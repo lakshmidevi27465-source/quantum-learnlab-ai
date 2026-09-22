@@ -1,8 +1,6 @@
 streamlit==1.64.0
 google-genai==2.24.0
 supabase==2.31.0
-qiskit==2.5.2
-qiskit-aer==0.17.2
 numpy
 pandas
 matplotlib
