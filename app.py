@@ -75,7 +75,6 @@ DEFAULT_SESSION_STATE = {
 
     "quiz_score": 0,
 
-    "circuit": QuantumCircuit(2),
 
     "ai_answer": "",
 
