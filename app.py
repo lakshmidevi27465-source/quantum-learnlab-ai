@@ -460,13 +460,20 @@ def run_circuit(
 
 
 def draw_circuit(qc):
+    """Return a Matplotlib circuit figure when available; otherwise return None."""
+    try:
+        return qc.draw(output="mpl", fold=-1)
+    except Exception:
+        return None
 
-    fig = qc.draw(
-        output="mpl",
-        fold=-1
-    )
 
-    return fig
+def show_circuit(qc):
+    """Display a circuit with a text fallback for Streamlit Cloud."""
+    fig = draw_circuit(qc)
+    if fig is not None:
+        st.pyplot(fig)
+    else:
+        st.code(qc.draw(output="text"), language="text")
 
 
 # =========================================================
@@ -612,7 +619,7 @@ def render_workflow():
         else:
             qc = workflow_build_circuit(st.session_state.workflow_topic)
             st.write(f"Circuit for **{st.session_state.workflow_topic}**")
-            st.pyplot(draw_circuit(qc))
+            show_circuit(qc)
             st.code(qc.draw(output="text"), language="text")
             st.info("Backend role: the selected learning concept is converted into an executable quantum circuit.")
             if st.button("Run SIMULATE →", use_container_width=True):
@@ -700,104 +707,6 @@ def render_workflow():
                 st.rerun()
         else:
             st.warning("Revisit the current topic and complete the assessment successfully before progressing.")
-
-
-# =========================================================
-# HOME
-# =========================================================
-
-if page == "🚀 Learning Workflow":
-    render_workflow()
-
-elif page == "🏠 Home":
-
-    st.markdown(
-        '<div class="main-title">'
-        '⚛️ Quantum LearnLab AI'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-    st.markdown(
-        '<div class="subtitle">'
-        'Interactive AI-Powered Quantum Computing Learning Platform'
-        '</div>',
-        unsafe_allow_html=True
-    )
-
-    st.divider()
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        st.info(
-            "📚 Learn\n\n"
-            "Quantum concepts interactively."
-        )
-
-    with col2:
-
-        st.success(
-            "⚛️ Build\n\n"
-            "Create quantum circuits."
-        )
-
-    with col3:
-
-        st.warning(
-            "🤖 Ask AI\n\n"
-            "Get explanations and debugging help."
-        )
-
-    st.divider()
-
-    st.subheader(
-        "🚀 Learning Workflow"
-    )
-
-    st.write(
-        "Learn → Build → Run → Visualize → "
-        "Ask AI → Fix → Challenge → Track"
-    )
-
-    st.subheader(
-        "✨ Platform Features"
-    )
-
-    features = [
-
-        "Interactive quantum learning modules",
-
-        "Select-and-add quantum circuit builder",
-
-        "Qiskit simulation",
-
-        "Quantum algorithm demonstrations",
-
-        "Probability and measurement visualization",
-
-        "Qiskit code editor",
-
-        "Circuit debugging assistant",
-
-        "AI quantum tutor",
-
-        "Quiz and assessments",
-
-        "Personal progress tracking",
-
-        "Leaderboard and badges",
-
-        "Voice-based learning support"
-    ]
-
-    for feature in features:
-
-        st.write(
-            "✅",
-            feature
-        )
 
 
 # =========================================================
@@ -932,7 +841,7 @@ def render_gate_learning():
     st.subheader("Circuit Example")
     qc = gate_learning_circuit(selected_gate)
     try:
-        st.pyplot(draw_circuit(qc))
+        show_circuit(qc)
     except Exception:
         st.code(qc.draw(output="text"), language="text")
 
@@ -951,8 +860,107 @@ def render_gate_learning():
         st.success(f"{selected_gate} gate simulated successfully! +5 points")
 
 
+
 # =========================================================
-# LEARN
+# HOME
+# =========================================================
+
+if page == "🚀 Learning Workflow":
+    render_workflow()
+
+elif page == "🏠 Home":
+
+    st.markdown(
+        '<div class="main-title">'
+        '⚛️ Quantum LearnLab AI'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown(
+        '<div class="subtitle">'
+        'Interactive AI-Powered Quantum Computing Learning Platform'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.divider()
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+
+        st.info(
+            "📚 Learn\n\n"
+            "Quantum concepts interactively."
+        )
+
+    with col2:
+
+        st.success(
+            "⚛️ Build\n\n"
+            "Create quantum circuits."
+        )
+
+    with col3:
+
+        st.warning(
+            "🤖 Ask AI\n\n"
+            "Get explanations and debugging help."
+        )
+
+    st.divider()
+
+    st.subheader(
+        "🚀 Learning Workflow"
+    )
+
+    st.write(
+        "Learn → Build → Run → Visualize → "
+        "Ask AI → Fix → Challenge → Track"
+    )
+
+    st.subheader(
+        "✨ Platform Features"
+    )
+
+    features = [
+
+        "Interactive quantum learning modules",
+
+        "Select-and-add quantum circuit builder",
+
+        "Qiskit simulation",
+
+        "Quantum algorithm demonstrations",
+
+        "Probability and measurement visualization",
+
+        "Qiskit code editor",
+
+        "Circuit debugging assistant",
+
+        "AI quantum tutor",
+
+        "Quiz and assessments",
+
+        "Personal progress tracking",
+
+        "Leaderboard and badges",
+
+        "Voice-based learning support"
+    ]
+
+    for feature in features:
+
+        st.write(
+            "✅",
+            feature
+        )
+
+
+# =========================================================
+# GATE LEARNING NAVIGATION
 # =========================================================
 
 elif page == "📖 Gate Learning":
