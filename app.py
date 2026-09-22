@@ -16,6 +16,7 @@ try:
     from streamlit_sortables import sort_items
     SORTABLES_AVAILABLE = True
 except Exception:
+    sort_items = None
     SORTABLES_AVAILABLE = False
 
 
@@ -28,6 +29,16 @@ st.set_page_config(
     page_icon="⚛️",
     layout="wide"
 )
+
+
+# ============================================================
+# EXISTING FIGURES / ASSETS
+# ============================================================
+
+ASSETS_DIR = Path("assets")
+FIG_QUBIT = ASSETS_DIR / "fig1_qubit_superposition.png"
+FIG_ENTANGLEMENT = ASSETS_DIR / "fig3_entanglement_teleportation.png"
+FIG_CIRCUIT = ASSETS_DIR / "fig4_hadamard_cnot_circuit.png"
 
 
 # ============================================================
@@ -74,7 +85,8 @@ DEFAULT_SESSION_STATE = {
 
     "ai_answer": "",
 
-    "last_question": ""
+    "last_question": "",
+    "gemini_last_error": ""
 }
 
 
@@ -313,7 +325,10 @@ def generate_gemini(prompt, attempts=3):
     client = get_gemini_client()
 
     if client is None:
+        st.session_state.gemini_last_error = "Gemini client is not configured. Check GEMINI_API_KEY in Streamlit Secrets."
         return None
+
+    last_error = "Unknown Gemini error."
 
     for attempt in range(attempts):
 
@@ -324,39 +339,34 @@ def generate_gemini(prompt, attempts=3):
                 contents=prompt
             )
 
-            answer = getattr(
-                response,
-                "text",
-                None
-            )
+            answer = getattr(response, "text", None)
 
             if answer:
+                st.session_state.gemini_last_error = ""
                 return answer.strip()
+
+            last_error = "Gemini returned an empty response."
 
         except Exception as e:
 
-            error_text = str(e)
+            last_error = str(e)
+            error_text = last_error.lower()
 
             is_temporary_error = (
                 "503" in error_text
-                or
-                "UNAVAILABLE" in error_text
-                or
-                "high demand" in error_text.lower()
+                or "unavailable" in error_text
+                or "high demand" in error_text
+                or "429" in error_text
+                or "resource exhausted" in error_text
             )
 
-            if is_temporary_error:
+            if is_temporary_error and attempt < attempts - 1:
+                time.sleep(2 ** attempt)
+                continue
 
-                if attempt < attempts - 1:
+            break
 
-                    wait_time = 2 ** attempt
-
-                    time.sleep(wait_time)
-
-                    continue
-
-            return None
-
+    st.session_state.gemini_last_error = last_error
     return None
 
 
@@ -406,8 +416,7 @@ def local_topic_detection(question):
 def ask_gemini(question):
 
     prompt = f"""
-You are an AI tutor inside an interactive quantum computing
-learning platform.
+You are an AI tutor inside an interactive quantum computing learning platform.
 
 User question:
 {question}
@@ -415,12 +424,12 @@ User question:
 Explain the answer in simple technical English.
 
 Requirements:
-- Beginner friendly
-- Technically correct
-- Use short sections
-- Use bullet points where useful
-- Give a simple example
-- Focus on quantum computing
+- Answer the user's actual question directly.
+- Beginner friendly but technically correct.
+- Use short sections and bullet points where useful.
+- Give a simple example when appropriate.
+- Do not replace the answer with a predefined topic explanation.
+- Focus on quantum computing when the question is about quantum computing.
 """
 
     answer = generate_gemini(prompt)
@@ -428,10 +437,13 @@ Requirements:
     if answer:
         return answer
 
-    # Gemini unavailable → local fallback
-    topic = local_topic_detection(question)
-
-    return workflow_explain(topic)
+    error = st.session_state.get("gemini_last_error", "Gemini is temporarily unavailable.")
+    return (
+        "### ⚠️ Gemini is temporarily unavailable\n\n"
+        f"The platform could not generate an AI answer right now.\n\n"
+        f"**Error:** `{error}`\n\n"
+        "Please try the same question again after a short time."
+    )
 
 
 # ============================================================
@@ -770,11 +782,12 @@ def simulate_circuit(qc, shots=512):
 # ============================================================
 
 def render_circuit_builder():
-    st.title("🔧 Circuit Builder")
-    st.write("Drag quantum gates into the circuit area, then simulate the circuit.")
 
-    num_qubits = st.number_input("Number of qubits", 1, 8, 2, 1)
-    shots = st.number_input("Shots", 1, 10000, 512, 1)
+    st.title("🔧 Circuit Builder")
+    st.write("Drag gates from the Gate Palette into the Circuit area. Reorder them to change the circuit sequence.")
+
+    num_qubits = st.number_input("Number of qubits", min_value=1, max_value=8, value=2, step=1)
+    shots = st.number_input("Shots", min_value=1, max_value=10000, value=512, step=1)
 
     if "drag_gate_sequence" not in st.session_state:
         st.session_state.drag_gate_sequence = []
@@ -782,60 +795,81 @@ def render_circuit_builder():
         st.session_state.builder_counts = None
 
     gates = ["H", "X", "Y", "Z", "S", "T", "CNOT", "CZ", "SWAP"]
+
     if not SORTABLES_AVAILABLE:
-        st.error("Drag-and-drop requires streamlit-sortables. Add it to requirements.txt.")
+        st.error("Drag-and-drop component is not installed. Add streamlit-sortables==0.3.1 to requirements.txt.")
         return
 
     result = sort_items(
         [
             {"header": "🧩 Gate Palette", "items": gates},
-            {"header": "⚛️ Circuit — drop gates here", "items": st.session_state.drag_gate_sequence},
+            {"header": "⚛️ Circuit — drag gates here", "items": st.session_state.drag_gate_sequence},
         ],
         multi_containers=True,
         direction="horizontal",
         key="quantum_gate_drag_drop",
     )
+
     if isinstance(result, list) and len(result) >= 2:
-        st.session_state.drag_gate_sequence = [
-            x for x in result[1].get("items", []) if x in gates
-        ]
+        circuit_items = result[1].get("items", []) if isinstance(result[1], dict) else []
+        st.session_state.drag_gate_sequence = [g for g in circuit_items if g in gates]
 
     seq = st.session_state.drag_gate_sequence
-    st.write("**Current circuit:** " + (" → ".join(seq) if seq else "No gates added"))
+
+    st.subheader("Current Gate Sequence")
+    st.info(" → ".join(seq) if seq else "Drag gates into the circuit area to begin.")
 
     qc = QuantumCircuit(int(num_qubits), int(num_qubits))
-    for gate in seq:
-        if gate == "H": qc.h(0)
-        elif gate == "X": qc.x(0)
-        elif gate == "Y": qc.y(0)
-        elif gate == "Z": qc.z(0)
-        elif gate == "S": qc.s(0)
-        elif gate == "T": qc.t(0)
-        elif int(num_qubits) >= 2:
-            if gate == "CNOT": qc.cx(0, 1)
-            elif gate == "CZ": qc.cz(0, 1)
-            elif gate == "SWAP": qc.swap(0, 1)
 
-    st.subheader("Circuit Diagram")
+    for gate in seq:
+        if gate == "H":
+            qc.h(0)
+        elif gate == "X":
+            qc.x(0)
+        elif gate == "Y":
+            qc.y(0)
+        elif gate == "Z":
+            qc.z(0)
+        elif gate == "S":
+            qc.s(0)
+        elif gate == "T":
+            qc.t(0)
+        elif int(num_qubits) >= 2:
+            if gate == "CNOT":
+                qc.cx(0, 1)
+            elif gate == "CZ":
+                qc.cz(0, 1)
+            elif gate == "SWAP":
+                qc.swap(0, 1)
+
+    st.subheader("⚛️ Circuit Diagram")
     st.code(str(qc.draw(output="text")), language="text")
 
     explanations = {
-        "H":"Creates superposition.", "X":"Flips |0⟩ and |1⟩.",
-        "Y":"Bit flip with phase change.", "Z":"Changes the phase of |1⟩.",
-        "S":"Applies a π/2 phase shift.", "T":"Applies a π/4 phase shift.",
-        "CNOT":"Flips the target when the control is |1⟩.",
-        "CZ":"Applies a phase flip to |11⟩.", "SWAP":"Exchanges two qubit states."
+        "H": "Creates superposition.",
+        "X": "Flips |0⟩ and |1⟩.",
+        "Y": "Performs a bit flip together with a phase change.",
+        "Z": "Changes the phase of |1⟩.",
+        "S": "Applies a π/2 phase shift.",
+        "T": "Applies a π/4 phase shift.",
+        "CNOT": "Flips the target qubit when the control qubit is |1⟩.",
+        "CZ": "Applies a phase flip to the |11⟩ component.",
+        "SWAP": "Exchanges the states of two qubits."
     }
+
     st.subheader("📘 Circuit Explanation")
-    for i, gate in enumerate(seq, 1):
-        st.write(f"**Step {i} — {gate}:** {explanations[gate]}")
+    if seq:
+        for i, gate in enumerate(seq, 1):
+            st.write(f"**Step {i} — {gate}:** {explanations[gate]}")
+    else:
+        st.caption("No gates selected yet.")
 
     c1, c2 = st.columns(2)
     with c1:
-        if st.button("▶️ Simulate Circuit", use_container_width=True):
+        if st.button("▶️ Simulate Circuit", width="stretch"):
             st.session_state.builder_counts = simulate_circuit(qc, int(shots))
     with c2:
-        if st.button("🗑️ Clear Circuit", use_container_width=True):
+        if st.button("🗑️ Clear Circuit", width="stretch"):
             st.session_state.drag_gate_sequence = []
             st.session_state.builder_counts = None
             st.rerun()
@@ -864,7 +898,7 @@ def render_fix_circuit():
 
     if st.button(
         "🤖 Analyze Circuit",
-        use_container_width=True
+        width="stretch"
     ):
 
         if not question.strip():
@@ -922,7 +956,7 @@ def render_ai_tutor():
 
     if st.button(
         "Ask Gemini",
-        use_container_width=True
+        width="stretch"
     ):
 
         if not question.strip():
@@ -1094,7 +1128,7 @@ def render_quiz():
 
     if st.button(
         "Submit Quiz",
-        use_container_width=True
+        width="stretch"
     ):
 
         st.session_state.quiz_score = score
@@ -1143,7 +1177,7 @@ def render_learn():
 
     if st.button(
         "Build Example Circuit",
-        use_container_width=True
+        width="stretch"
     ):
 
         qc = workflow_build_circuit(
@@ -1177,55 +1211,89 @@ def render_learn():
 # ============================================================
 
 def render_algorithms():
+
     st.title("🧠 Quantum Algorithms")
-    algorithm = st.selectbox("Select algorithm", ["Grover Search", "QFT", "VQE", "QAOA"])
+
+    algorithm = st.selectbox(
+        "Select algorithm",
+        ["Grover Search", "QFT", "VQE", "QAOA"]
+    )
 
     info = {
         "Grover Search": (
-            "Grover searches an unstructured space with idealized O(√N) query complexity.",
+            "Grover's algorithm searches an unstructured space and ideally uses about O(√N) oracle queries.",
             "H → Oracle → Diffusion → Measurement",
-            "H creates superposition; the oracle marks the target; diffusion amplifies its amplitude."
+            "The H gates create a search-space superposition. The oracle marks the target state, and the diffusion step amplifies its probability.",
+            FIG_CIRCUIT
         ),
         "QFT": (
-            "QFT transforms amplitudes into the Fourier basis and is used in several quantum algorithms.",
+            "The Quantum Fourier Transform changes a quantum state into the Fourier basis and is used inside several quantum algorithms.",
             "H → Controlled Phase → H → SWAP → Measurement",
-            "H gates create Fourier components, controlled phase changes relative phases, and SWAP reverses qubit order."
+            "Hadamard gates create the Fourier components, controlled-phase operations add relative phase information, and SWAP reverses qubit order when required.",
+            FIG_CIRCUIT
         ),
         "VQE": (
-            "VQE is a hybrid quantum-classical algorithm for estimating an objective such as molecular energy.",
+            "VQE is a hybrid quantum-classical algorithm used to estimate an objective such as molecular energy.",
             "Parameterized Ansatz → Measurement → Classical Optimizer",
-            "The ansatz prepares a parameterized state; measurements estimate the objective; a classical optimizer updates parameters."
+            "The quantum circuit prepares a parameterized state. Measurements estimate the objective, and a classical optimizer updates the parameters.",
+            FIG_ENTANGLEMENT
         ),
         "QAOA": (
             "QAOA is a hybrid quantum-classical method for approximate combinatorial optimization.",
             "Initial State → Cost Layer → Mixer → Measurement",
-            "The cost layer encodes the objective, the mixer explores states, and classical optimization updates parameters."
+            "The cost layer encodes the optimization objective, the mixer explores candidate states, and a classical optimizer updates the circuit parameters.",
+            FIG_CIRCUIT
         ),
     }
-    explanation, flow, circuit_explanation = info[algorithm]
+
+    explanation, flow, circuit_explanation, figure = info[algorithm]
 
     st.subheader("📖 Algorithm Explanation")
     st.write(explanation)
+
+    if figure.exists():
+        st.subheader("🖼️ Existing Figure")
+        st.image(str(figure), width="stretch")
+
     st.subheader("🔗 Algorithm Flow")
     st.info(flow)
 
     if algorithm == "Grover Search":
-        qc = QuantumCircuit(2, 2); qc.h([0,1]); qc.cz(0,1); qc.h([0,1]); qc.measure([0,1],[0,1])
+        qc = QuantumCircuit(2, 2)
+        qc.h([0, 1])
+        qc.cz(0, 1)
+        qc.h([0, 1])
+        qc.measure([0, 1], [0, 1])
     elif algorithm == "QFT":
-        qc = QuantumCircuit(2, 2); qc.h(0); qc.cp(np.pi/2,0,1); qc.h(1); qc.swap(0,1); qc.measure([0,1],[0,1])
+        qc = QuantumCircuit(2, 2)
+        qc.h(0)
+        qc.cp(np.pi / 2, 0, 1)
+        qc.h(1)
+        qc.swap(0, 1)
+        qc.measure([0, 1], [0, 1])
     elif algorithm == "VQE":
-        qc = QuantumCircuit(2, 2); qc.ry(np.pi/4,0); qc.cx(0,1); qc.measure([0,1],[0,1])
+        qc = QuantumCircuit(2, 2)
+        qc.ry(np.pi / 4, 0)
+        qc.cx(0, 1)
+        qc.measure([0, 1], [0, 1])
     else:
-        qc = QuantumCircuit(2, 2); qc.h([0,1]); qc.rzz(np.pi/4,0,1); qc.rx(np.pi/4,0); qc.rx(np.pi/4,1); qc.measure([0,1],[0,1])
+        qc = QuantumCircuit(2, 2)
+        qc.h([0, 1])
+        qc.rzz(np.pi / 4, 0, 1)
+        qc.rx(np.pi / 4, 0)
+        qc.rx(np.pi / 4, 1)
+        qc.measure([0, 1], [0, 1])
 
     st.subheader("⚛️ Circuit")
     st.code(str(qc.draw(output="text")), language="text")
+
     st.subheader("🧩 Circuit Explanation")
     st.write(circuit_explanation)
 
-    if st.button("▶️ Simulate Algorithm Circuit", use_container_width=True, key=f"algo_sim_{algorithm}"):
+    if st.button("▶️ Simulate Algorithm Circuit", width="stretch", key=f"algo_sim_{algorithm}"):
         counts = simulate_circuit(qc, 512)
         if counts:
+            st.subheader("📊 Simulation Result")
             st.json(counts)
 
 
@@ -1251,7 +1319,7 @@ print(qc.draw())
 
     if st.button(
         "▶️ Run Code",
-        use_container_width=True
+        width="stretch"
     ):
 
         st.code(
@@ -1320,7 +1388,7 @@ def render_workflow():
 
         if st.button(
             "Ask",
-            use_container_width=True
+            width="stretch"
         ):
 
             if not question.strip():
@@ -1393,7 +1461,7 @@ def render_workflow():
 
         if st.button(
             "Continue to BUILD →",
-            use_container_width=True
+            width="stretch"
         ):
 
             qc = workflow_build_circuit(
@@ -1440,7 +1508,7 @@ def render_workflow():
 
         if st.button(
             "Continue to SIMULATE →",
-            use_container_width=True
+            width="stretch"
         ):
 
             st.session_state.workflow_stage = (
@@ -1479,7 +1547,7 @@ def render_workflow():
 
         if st.button(
             "▶️ Run Simulation",
-            use_container_width=True
+            width="stretch"
         ):
 
             counts = simulate_circuit(
@@ -1505,7 +1573,7 @@ def render_workflow():
 
             if st.button(
                 "Continue to VISUALIZE →",
-                use_container_width=True
+                width="stretch"
             ):
 
                 st.session_state.workflow_stage = (
@@ -1560,7 +1628,7 @@ def render_workflow():
 
         if st.button(
             "Continue to ASSESS / ADAPT →",
-            use_container_width=True
+            width="stretch"
         ):
 
             st.session_state.workflow_stage = (
@@ -1680,7 +1748,7 @@ def render_workflow():
 
         if st.button(
             "Submit Assessment",
-            use_container_width=True
+            width="stretch"
         ):
 
             if answer == qdata["answer"]:
@@ -1729,7 +1797,7 @@ def render_workflow():
 
             if st.button(
                 "Continue to NEXT LEARNING PATH →",
-                use_container_width=True
+                width="stretch"
             ):
 
                 st.session_state.workflow_stage = (
@@ -1787,7 +1855,7 @@ def render_workflow():
 
         if st.button(
             "Start New Question",
-            use_container_width=True
+            width="stretch"
         ):
 
             st.session_state.workflow_stage = "ASK"
@@ -2019,7 +2087,7 @@ def render_auth():
 
         if st.button(
             "Login",
-            use_container_width=True
+            width="stretch"
         ):
 
             if not email or not password:
@@ -2081,7 +2149,7 @@ def render_auth():
 
         if st.button(
             "Create Account",
-            use_container_width=True
+            width="stretch"
         ):
 
             if not name or not email or not password:
@@ -2121,52 +2189,6 @@ def render_auth():
                     st.error(
                         message
                     )
-
-
-GATE_INFO = {
-    "H":("Hadamard","Creates superposition.","[[1,1],[1,-1]] / √2","|0⟩ → (|0⟩+|1⟩)/√2","Superposition",1),
-    "X":("Pauli-X","Quantum NOT / bit flip.","[[0,1],[1,0]]","|0⟩ ↔ |1⟩","Bit flip",1),
-    "Y":("Pauli-Y","Bit flip with phase.","[[0,-i],[i,0]]","|0⟩ → i|1⟩","Bit and phase change",1),
-    "Z":("Pauli-Z","Phase flip.","[[1,0],[0,-1]]","|1⟩ → -|1⟩","Phase control",1),
-    "S":("S Gate","π/2 phase shift.","[[1,0],[0,i]]","|1⟩ → i|1⟩","Phase rotation",1),
-    "T":("T Gate","π/4 phase shift.","diag(1,e^(iπ/4))","|1⟩ → e^(iπ/4)|1⟩","Fine phase rotation",1),
-    "CNOT":("Controlled-NOT","Flips target when control is 1.","4×4 CNOT matrix","|10⟩ → |11⟩","Entanglement / control",2),
-    "CZ":("Controlled-Z","Phase flip on |11⟩.","diag(1,1,1,-1)","|11⟩ → -|11⟩","Controlled phase",2),
-    "SWAP":("SWAP","Exchanges two qubit states.","4×4 SWAP matrix","|01⟩ ↔ |10⟩","State exchange",2)
-}
-
-def gate_learning_circuit(gate):
-    n = GATE_INFO[gate][5]
-    qc = QuantumCircuit(n,n)
-    if gate=="H": qc.h(0)
-    elif gate=="X": qc.x(0)
-    elif gate=="Y": qc.y(0)
-    elif gate=="Z": qc.z(0)
-    elif gate=="S": qc.s(0)
-    elif gate=="T": qc.t(0)
-    elif gate=="CNOT": qc.cx(0,1)
-    elif gate=="CZ": qc.cz(0,1)
-    elif gate=="SWAP": qc.swap(0,1)
-    qc.measure(range(n),range(n))
-    return qc
-
-def render_gate_learning():
-    st.title("📖 Gate Learning")
-    gate = st.selectbox("Select a gate", list(GATE_INFO), key="gate_learning_selector")
-    name, desc, matrix, io, use, _ = GATE_INFO[gate]
-    st.header(f"{gate} — {name}")
-    st.info(desc)
-    c1,c2=st.columns(2)
-    with c1:
-        st.subheader("Matrix"); st.code(matrix)
-    with c2:
-        st.subheader("Input → Output"); st.code(io)
-    st.subheader("Main Use"); st.write(use)
-    qc=gate_learning_circuit(gate)
-    st.subheader("Circuit Example"); st.code(str(qc.draw(output="text")), language="text")
-    if st.button(f"▶️ Try {gate} Gate", use_container_width=True, key=f"try_{gate}"):
-        counts=simulate_circuit(qc,512)
-        if counts: st.json(counts)
 
 
 # ============================================================
@@ -2223,7 +2245,7 @@ def render_sidebar():
 
         if st.button(
             "🚪 Logout",
-            use_container_width=True
+            width="stretch"
         ):
 
             logout()
@@ -2254,10 +2276,6 @@ else:
     elif page == "📚 Learn":
 
         render_learn()
-
-    elif page == "📖 Gate Learning":
-
-        render_gate_learning()
 
     elif page == "🔧 Circuit Builder":
 
