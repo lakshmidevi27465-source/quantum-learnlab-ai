@@ -394,6 +394,95 @@ def local_topic_detection(question):
 
 
 # ============================================================
+# LOCAL QUESTION ANSWER FALLBACK
+# ============================================================
+def local_question_answer(question):
+    """Useful offline answers when Gemini is temporarily unavailable."""
+    q = question.lower().strip()
+
+    if "quantum circuit" in q or "what is a quantum circuit" in q:
+        return """### What is a Quantum Circuit?
+
+A **quantum circuit** is a sequence of quantum operations applied to one or more qubits to perform a quantum computation.
+
+**Main components:**
+- **Qubits** – store quantum information.
+- **Quantum gates** – change qubit states, such as H, X, Z and CNOT.
+- **Measurement** – converts the final quantum state into a classical result.
+
+**Simple example:** A Hadamard (H) gate puts a qubit into superposition, and measurement gives a probabilistic 0 or 1 result.
+
+```text
+q0: ──H──M──
+```
+"""
+    if "qubit" in q and ("what is" in q or "explain" in q or "meaning" in q):
+        return """### What is a Qubit?
+
+A **qubit** is the basic unit of quantum information. A qubit can be in a superposition of the basis states |0⟩ and |1⟩.
+
+**|ψ⟩ = α|0⟩ + β|1⟩**
+"""
+    if "superposition" in q:
+        return """### What is Superposition?
+
+**Superposition** means a qubit can be in a combination of |0⟩ and |1⟩ before measurement.
+
+The Hadamard gate can create an equal superposition:
+**|0⟩ → (|0⟩ + |1⟩)/√2**.
+"""
+    if "entanglement" in q or "entangled" in q:
+        return """### What is Quantum Entanglement?
+
+**Quantum entanglement** is a quantum correlation between two or more qubits where their joint state cannot be described as independent states.
+
+A common Bell-state circuit uses **H + CNOT**.
+"""
+    if "cnot" in q or "controlled not" in q:
+        return """### What is a CNOT Gate?
+
+**CNOT (Controlled-NOT)** is a two-qubit gate. The target qubit flips when the control qubit is |1⟩.
+
+Example: **|10⟩ → |11⟩**.
+"""
+    if "measurement" in q or "measure" in q:
+        return """### What is Quantum Measurement?
+
+Measurement reads a quantum state and produces a classical result. For a qubit in superposition, repeated measurements reveal a probability distribution.
+"""
+    if "hadamard" in q or " h gate" in q or q.startswith("h gate"):
+        return """### What is the Hadamard Gate?
+
+The **Hadamard (H) gate** creates superposition. For example:
+**|0⟩ → (|0⟩ + |1⟩)/√2**.
+"""
+    if "grover" in q:
+        return """### What is Grover's Algorithm?
+
+Grover's algorithm is a quantum search algorithm for unstructured search problems. Its idealized query complexity is approximately **O(√N)**.
+"""
+    if "qft" in q or "quantum fourier transform" in q:
+        return """### What is QFT?
+
+**QFT (Quantum Fourier Transform)** is the quantum analogue of the discrete Fourier transform and is used as a component of several quantum algorithms.
+"""
+    if "classical computer" in q and "quantum computer" in q:
+        return """### Classical Computer vs Quantum Computer
+
+Classical computers use bits, while quantum computers use qubits and quantum operations such as superposition, interference and entanglement. Quantum computers are not automatically faster for every problem; the advantage depends on the algorithm and problem structure.
+"""
+
+    topic = local_topic_detection(question)
+    if topic != "General":
+        return workflow_explain(topic)
+
+    return """### AI Tutor
+
+Gemini is temporarily unavailable for this question. Please try again in a moment. The platform will return a direct AI answer when the service is available.
+"""
+
+
+# ============================================================
 # GEMINI QUESTION ANSWER
 # ============================================================
 
@@ -422,10 +511,8 @@ Requirements:
     if answer:
         return answer
 
-    # Gemini unavailable → local fallback
-    topic = local_topic_detection(question)
-
-    return workflow_explain(topic)
+    # Gemini unavailable → answer the actual question locally
+    return local_question_answer(question)
 
 
 # ============================================================
@@ -433,6 +520,12 @@ Requirements:
 # ============================================================
 
 def workflow_topic_from_question(question):
+
+    # Detect common topics locally first so valid questions are not
+    # incorrectly labeled General during a Gemini outage.
+    local_topic = local_topic_detection(question)
+    if local_topic != "General":
+        return local_topic
 
     prompt = f"""
 Classify this quantum computing question into exactly one
@@ -457,16 +550,12 @@ Return ONLY the topic name.
     result = generate_gemini(prompt)
 
     if result:
-
         result_lower = result.lower()
-
         for topic in TOPICS:
-
             if topic.lower() in result_lower:
                 return topic
 
-    # Gemini failed → local detection
-    return local_topic_detection(question)
+    return "General"
 
 
 # ============================================================
@@ -1484,13 +1573,9 @@ def render_workflow():
 
         st.divider()
 
-        st.subheader(
-            "Topic Explanation"
-        )
-
-        st.markdown(
-            workflow_explain(topic)
-        )
+        st.subheader("Your Question")
+        st.write(st.session_state.workflow_question)
+        st.caption("The answer above is for your actual question. The detected topic is used to select the related circuit.")
 
         if st.button(
             "Continue to BUILD →",
