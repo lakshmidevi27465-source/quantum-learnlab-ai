@@ -397,89 +397,91 @@ def local_topic_detection(question):
 # LOCAL QUESTION ANSWER FALLBACK
 # ============================================================
 def local_question_answer(question):
-    """Useful offline answers when Gemini is temporarily unavailable."""
     q = question.lower().strip()
 
-    if "quantum circuit" in q or "what is a quantum circuit" in q:
-        return """### What is a Quantum Circuit?
+    if 'quantum computing' in q or 'quantum computer' in q:
+        return """### Quantum Computing
 
-A **quantum circuit** is a sequence of quantum operations applied to one or more qubits to perform a quantum computation.
+Quantum computing is a type of computing that uses **qubits** and quantum principles such as **superposition, entanglement, and quantum interference**.
 
-**Main components:**
-- **Qubits** – store quantum information.
-- **Quantum gates** – change qubit states, such as H, X, Z and CNOT.
-- **Measurement** – converts the final quantum state into a classical result.
+A classical bit is 0 or 1, while a qubit can be represented as a combination of |0⟩ and |1⟩. Quantum gates manipulate these states and measurement produces classical results.
 
-**Simple example:** A Hadamard (H) gate puts a qubit into superposition, and measurement gives a probabilistic 0 or 1 result.
+### Applications
+- Cryptography and cybersecurity
+- Drug and molecular discovery
+- Material science
+- Optimization
+- Financial modelling
+- Quantum machine learning
+- Scientific simulation
+
+Quantum computers are not automatically faster for every problem; their advantage depends on the problem and algorithm."""
+
+    if 'quantum circuit' in q or 'quantum circuits' in q:
+        return """### Quantum Circuit
+
+A quantum circuit is a sequence of **quantum gates applied to qubits** to perform a computation.
+
+Main parts are qubits, quantum gates, and measurement.
 
 ```text
 q0: ──H──M──
 ```
-"""
-    if "qubit" in q and ("what is" in q or "explain" in q or "meaning" in q):
-        return """### What is a Qubit?
 
-A **qubit** is the basic unit of quantum information. A qubit can be in a superposition of the basis states |0⟩ and |1⟩.
+The H gate creates superposition and measurement produces a classical result."""
 
-**|ψ⟩ = α|0⟩ + β|1⟩**
-"""
-    if "superposition" in q:
-        return """### What is Superposition?
+    if 'qubit' in q:
+        return """### Qubit
 
-**Superposition** means a qubit can be in a combination of |0⟩ and |1⟩ before measurement.
+A qubit is the basic unit of quantum information. A general single-qubit state is **|ψ⟩ = α|0⟩ + β|1⟩**, where the amplitudes determine measurement probabilities."""
 
-The Hadamard gate can create an equal superposition:
-**|0⟩ → (|0⟩ + |1⟩)/√2**.
-"""
-    if "entanglement" in q or "entangled" in q:
-        return """### What is Quantum Entanglement?
+    if 'superposition' in q:
+        return """### Superposition
 
-**Quantum entanglement** is a quantum correlation between two or more qubits where their joint state cannot be described as independent states.
+Superposition means a qubit can be in a combination of basis states before measurement. The Hadamard gate can create **(|0⟩ + |1⟩)/√2** from |0⟩."""
 
-A common Bell-state circuit uses **H + CNOT**.
-"""
-    if "cnot" in q or "controlled not" in q:
-        return """### What is a CNOT Gate?
+    if 'entanglement' in q or 'entangled' in q:
+        return """### Quantum Entanglement
 
-**CNOT (Controlled-NOT)** is a two-qubit gate. The target qubit flips when the control qubit is |1⟩.
+Entanglement is a quantum correlation in which the joint state of multiple qubits cannot be described as independent states. H followed by CNOT is a common way to create a Bell state."""
 
-Example: **|10⟩ → |11⟩**.
-"""
-    if "measurement" in q or "measure" in q:
-        return """### What is Quantum Measurement?
+    if 'cnot' in q or 'controlled not' in q:
+        return """### CNOT Gate
 
-Measurement reads a quantum state and produces a classical result. For a qubit in superposition, repeated measurements reveal a probability distribution.
-"""
-    if "hadamard" in q or " h gate" in q or q.startswith("h gate"):
-        return """### What is the Hadamard Gate?
+CNOT is a two-qubit controlled operation. The target qubit flips when the control qubit is |1⟩. It is widely used for entanglement and quantum algorithms."""
 
-The **Hadamard (H) gate** creates superposition. For example:
-**|0⟩ → (|0⟩ + |1⟩)/√2**.
-"""
-    if "grover" in q:
-        return """### What is Grover's Algorithm?
+    if 'measurement' in q or 'measure' in q:
+        return """### Quantum Measurement
 
-Grover's algorithm is a quantum search algorithm for unstructured search problems. Its idealized query complexity is approximately **O(√N)**.
-"""
-    if "qft" in q or "quantum fourier transform" in q:
-        return """### What is QFT?
+Measurement converts quantum information into a classical outcome. For a superposition, repeated measurements produce results according to the state's probability distribution."""
 
-**QFT (Quantum Fourier Transform)** is the quantum analogue of the discrete Fourier transform and is used as a component of several quantum algorithms.
-"""
-    if "classical computer" in q and "quantum computer" in q:
-        return """### Classical Computer vs Quantum Computer
+    if 'hadamard' in q or 'h gate' in q:
+        return """### Hadamard Gate
 
-Classical computers use bits, while quantum computers use qubits and quantum operations such as superposition, interference and entanglement. Quantum computers are not automatically faster for every problem; the advantage depends on the algorithm and problem structure.
-"""
+The Hadamard (H) gate creates superposition. For example, **|0⟩ → (|0⟩ + |1⟩)/√2**."""
 
-    topic = local_topic_detection(question)
-    if topic != "General":
-        return workflow_explain(topic)
+    if 'grover' in q:
+        return """### Grover's Algorithm
 
-    return """### AI Tutor
+Grover's algorithm is a quantum search algorithm for unstructured search. Its idealized query complexity is approximately **O(√N)**."""
 
-Gemini is temporarily unavailable for this question. Please try again in a moment. The platform will return a direct AI answer when the service is available.
-"""
+    if 'qft' in q or 'quantum fourier transform' in q:
+        return """### Quantum Fourier Transform
+
+QFT is the quantum analogue of the discrete Fourier transform and is an important component of algorithms such as phase estimation and Shor's algorithm."""
+
+    if 'classical' in q and 'quantum' in q:
+        return """### Classical vs Quantum Computing
+
+Classical computers use bits and classical logic gates. Quantum computers use qubits and quantum gates and can exploit superposition, entanglement and interference. Quantum computing is designed for specific problem classes rather than being a universal replacement for classical computing."""
+
+    return f"""### AI Tutor
+
+Gemini is temporarily unavailable, so the platform cannot generate a full AI response for this question right now.
+
+**Your question:** {question}
+
+Try again shortly; the Gemini connection is configured to retry temporary service errors automatically."""
 
 
 # ============================================================
