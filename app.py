@@ -539,7 +539,7 @@ User question:
     try:
 
         response = client.models.generate_content(
-            model="gemini-2.5-flash",
+            model="gemini--flash",
             contents=prompt
         )
 
@@ -1803,7 +1803,7 @@ def render_home():
 
         st.metric(
             "🤖 AI Tutor",
-            "Gemini 2.5 Flash"
+            "Gemini 3.6 Flash"
         )
 
     st.divider()
