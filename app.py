@@ -490,31 +490,48 @@ Try again shortly; the Gemini connection is configured to retry temporary servic
 
 def ask_gemini(question):
 
+    """Answer the user's exact question with Gemini 2.5 Flash.
+
+    Important: this function never substitutes a keyword-based fixed
+    answer for the user's question. If Gemini is unavailable, it returns
+    a clear service-error message instead.
+    """
+
+    clean_question = question.strip()
+
     prompt = f"""
-You are an AI tutor inside an interactive quantum computing
-learning platform.
+You are Quantum LearnLab AI Tutor.
+
+Answer the user's EXACT question below. Do not replace the question with
+a generic topic explanation and do not assume that the user asked a
+different question.
 
 User question:
-{question}
+{clean_question}
 
-Explain the answer in simple technical English.
-
-Requirements:
-- Beginner friendly
-- Technically correct
-- Use short sections
-- Use bullet points where useful
-- Give a simple example
-- Focus on quantum computing
+Instructions:
+- Directly answer exactly what the user asked.
+- Use simple technical English suitable for a beginner B.Tech student.
+- Keep the answer focused on the question.
+- Use headings or bullet points when they improve clarity.
+- Give an example when useful.
+- If the question has multiple parts, answer every part.
+- If the question is ambiguous, briefly state the ambiguity and answer
+  the most reasonable interpretation.
+- Do not output a topic label instead of an answer.
 """
 
-    answer = generate_gemini(prompt)
+    answer = generate_gemini(prompt, attempts=3)
 
     if answer:
         return answer
 
-    # Gemini unavailable → answer the actual question locally
-    return local_question_answer(question)
+    return (
+        "### Gemini is temporarily unavailable\n\n"
+        "I could not generate an answer to your exact question right now. "
+        "Please try the same question again in a few seconds.\n\n"
+        "**Your question:** " + clean_question
+    )
 
 
 # ============================================================
@@ -1523,11 +1540,14 @@ def render_workflow():
 
             else:
 
-                topic = workflow_topic_from_question(
+                # First answer the EXACT question with Gemini.
+                # Topic detection is only used afterwards for the learning
+                # path and related circuit; it must never replace the answer.
+                answer = ask_gemini(
                     question
                 )
 
-                answer = ask_gemini(
+                topic = workflow_topic_from_question(
                     question
                 )
 
@@ -2080,7 +2100,7 @@ Learn quantum computing through:
     )
 
     st.info(
-        "Gemini 3.6 Flash powers the AI tutor. "
+        "Gemini 2.5 Flash powers the AI tutor. "
         "If Gemini is temporarily unavailable, "
         "the platform uses local fallback explanations "
         "and circuit generation."
