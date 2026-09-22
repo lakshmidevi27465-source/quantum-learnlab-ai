@@ -303,54 +303,79 @@ def get_gemini_client():
 # ============================================================
 
 def generate_gemini(prompt, attempts=3):
+    """Generate a response for the exact prompt.
+
+    Gemini 2.5 Flash is the primary model. If the current API key/project
+    cannot access it or it is temporarily unavailable, try supported Flash
+    fallback models. The user's prompt is sent unchanged to every model, so
+    the app still answers the exact question rather than using a fixed answer.
+    """
 
     client = get_gemini_client()
 
     if client is None:
+        st.session_state["gemini_last_error"] = (
+            "GEMINI_API_KEY is missing or the Gemini client could not be created."
+        )
         return None
 
-    for attempt in range(attempts):
+    # Primary model requested for this project, followed by current fallbacks.
+    # Gemini 2.5 Flash remains a supported model, but Google has recently
+    # reported access limitations for some newer/newly-created projects.
+    models = [
+        "gemini-2.5-flash",
+        "gemini-3.5-flash",
+        "gemini-3.1-flash-lite",
+    ]
 
-        try:
+    last_error = "Unknown Gemini error."
 
-            response = client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
+    for model_name in models:
+        for attempt in range(attempts):
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt
+                )
 
-            answer = getattr(
-                response,
-                "text",
-                None
-            )
+                answer = getattr(response, "text", None)
 
-            if answer:
-                return answer.strip()
+                if answer and answer.strip():
+                    st.session_state["gemini_last_model"] = model_name
+                    st.session_state["gemini_last_error"] = ""
+                    return answer.strip()
 
-        except Exception as e:
+                last_error = f"{model_name} returned an empty response."
 
-            error_text = str(e)
+            except Exception as e:
+                last_error = str(e)
+                error_text = last_error.lower()
 
-            is_temporary_error = (
-                "503" in error_text
-                or
-                "UNAVAILABLE" in error_text
-                or
-                "high demand" in error_text.lower()
-            )
+                temporary = any(term in error_text for term in [
+                    "503", "unavailable", "high demand", "429",
+                    "resource exhausted", "rate limit", "timeout",
+                    "deadline exceeded", "internal"
+                ])
 
-            if is_temporary_error:
+                # If this model is inaccessible for this key/project (for
+                # example 403/404/model-not-found), immediately try fallback.
+                inaccessible = any(term in error_text for term in [
+                    "404", "not_found", "not found", "model_not_found",
+                    "permission denied", "403", "forbidden",
+                    "access denied"
+                ])
 
-                if attempt < attempts - 1:
-
-                    wait_time = 2 ** attempt
-
-                    time.sleep(wait_time)
-
+                if temporary and attempt < attempts - 1:
+                    time.sleep(2 ** attempt)
                     continue
 
-            return None
+                if inaccessible or temporary:
+                    break
 
+                # For other errors, do not keep hammering the same request.
+                break
+
+    st.session_state["gemini_last_error"] = last_error
     return None
 
 
@@ -526,11 +551,14 @@ Instructions:
     if answer:
         return answer
 
+    error = st.session_state.get("gemini_last_error", "")
+    detail = f"\n\n**Technical detail:** `{error}`" if error else ""
     return (
-        "### Gemini is temporarily unavailable\n\n"
+        "### Gemini could not generate the answer\n\n"
         "I could not generate an answer to your exact question right now. "
-        "Please try the same question again in a few seconds.\n\n"
-        "**Your question:** " + clean_question
+        "The app tried Gemini 2.5 Flash and the configured fallback models. "
+        "Please try again shortly.\n\n"
+        "**Your question:** " + clean_question + detail
     )
 
 
