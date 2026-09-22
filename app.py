@@ -12,6 +12,12 @@ from supabase import create_client
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
 
+try:
+    from streamlit_sortables import sort_items
+    SORTABLES_AVAILABLE = True
+except Exception:
+    SORTABLES_AVAILABLE = False
+
 
 # ============================================================
 # PAGE CONFIG
@@ -303,79 +309,54 @@ def get_gemini_client():
 # ============================================================
 
 def generate_gemini(prompt, attempts=3):
-    """Generate a response for the exact prompt.
-
-    Gemini 2.5 Flash is the primary model. If the current API key/project
-    cannot access it or it is temporarily unavailable, try supported Flash
-    fallback models. The user's prompt is sent unchanged to every model, so
-    the app still answers the exact question rather than using a fixed answer.
-    """
 
     client = get_gemini_client()
 
     if client is None:
-        st.session_state["gemini_last_error"] = (
-            "GEMINI_API_KEY is missing or the Gemini client could not be created."
-        )
         return None
 
-    # Primary model requested for this project, followed by current fallbacks.
-    # Gemini 2.5 Flash remains a supported model, but Google has recently
-    # reported access limitations for some newer/newly-created projects.
-    models = [
-        "gemini-2.5-flash",
-        "gemini-3.5-flash",
-        "gemini-3.1-flash-lite",
-    ]
+    for attempt in range(attempts):
 
-    last_error = "Unknown Gemini error."
+        try:
 
-    for model_name in models:
-        for attempt in range(attempts):
-            try:
-                response = client.models.generate_content(
-                    model=model_name,
-                    contents=prompt
-                )
+            response = client.models.generate_content(
+                model="gemini-3.6-flash",
+                contents=prompt
+            )
 
-                answer = getattr(response, "text", None)
+            answer = getattr(
+                response,
+                "text",
+                None
+            )
 
-                if answer and answer.strip():
-                    st.session_state["gemini_last_model"] = model_name
-                    st.session_state["gemini_last_error"] = ""
-                    return answer.strip()
+            if answer:
+                return answer.strip()
 
-                last_error = f"{model_name} returned an empty response."
+        except Exception as e:
 
-            except Exception as e:
-                last_error = str(e)
-                error_text = last_error.lower()
+            error_text = str(e)
 
-                temporary = any(term in error_text for term in [
-                    "503", "unavailable", "high demand", "429",
-                    "resource exhausted", "rate limit", "timeout",
-                    "deadline exceeded", "internal"
-                ])
+            is_temporary_error = (
+                "503" in error_text
+                or
+                "UNAVAILABLE" in error_text
+                or
+                "high demand" in error_text.lower()
+            )
 
-                # If this model is inaccessible for this key/project (for
-                # example 403/404/model-not-found), immediately try fallback.
-                inaccessible = any(term in error_text for term in [
-                    "404", "not_found", "not found", "model_not_found",
-                    "permission denied", "403", "forbidden",
-                    "access denied"
-                ])
+            if is_temporary_error:
 
-                if temporary and attempt < attempts - 1:
-                    time.sleep(2 ** attempt)
+                if attempt < attempts - 1:
+
+                    wait_time = 2 ** attempt
+
+                    time.sleep(wait_time)
+
                     continue
 
-                if inaccessible or temporary:
-                    break
+            return None
 
-                # For other errors, do not keep hammering the same request.
-                break
-
-    st.session_state["gemini_last_error"] = last_error
     return None
 
 
@@ -422,91 +403,89 @@ def local_topic_detection(question):
 # LOCAL QUESTION ANSWER FALLBACK
 # ============================================================
 def local_question_answer(question):
+    """Useful offline answers when Gemini is temporarily unavailable."""
     q = question.lower().strip()
 
-    if 'quantum computing' in q or 'quantum computer' in q:
-        return """### Quantum Computing
+    if "quantum circuit" in q or "what is a quantum circuit" in q:
+        return """### What is a Quantum Circuit?
 
-Quantum computing is a type of computing that uses **qubits** and quantum principles such as **superposition, entanglement, and quantum interference**.
+A **quantum circuit** is a sequence of quantum operations applied to one or more qubits to perform a quantum computation.
 
-A classical bit is 0 or 1, while a qubit can be represented as a combination of |0⟩ and |1⟩. Quantum gates manipulate these states and measurement produces classical results.
+**Main components:**
+- **Qubits** – store quantum information.
+- **Quantum gates** – change qubit states, such as H, X, Z and CNOT.
+- **Measurement** – converts the final quantum state into a classical result.
 
-### Applications
-- Cryptography and cybersecurity
-- Drug and molecular discovery
-- Material science
-- Optimization
-- Financial modelling
-- Quantum machine learning
-- Scientific simulation
-
-Quantum computers are not automatically faster for every problem; their advantage depends on the problem and algorithm."""
-
-    if 'quantum circuit' in q or 'quantum circuits' in q:
-        return """### Quantum Circuit
-
-A quantum circuit is a sequence of **quantum gates applied to qubits** to perform a computation.
-
-Main parts are qubits, quantum gates, and measurement.
+**Simple example:** A Hadamard (H) gate puts a qubit into superposition, and measurement gives a probabilistic 0 or 1 result.
 
 ```text
 q0: ──H──M──
 ```
+"""
+    if "qubit" in q and ("what is" in q or "explain" in q or "meaning" in q):
+        return """### What is a Qubit?
 
-The H gate creates superposition and measurement produces a classical result."""
+A **qubit** is the basic unit of quantum information. A qubit can be in a superposition of the basis states |0⟩ and |1⟩.
 
-    if 'qubit' in q:
-        return """### Qubit
+**|ψ⟩ = α|0⟩ + β|1⟩**
+"""
+    if "superposition" in q:
+        return """### What is Superposition?
 
-A qubit is the basic unit of quantum information. A general single-qubit state is **|ψ⟩ = α|0⟩ + β|1⟩**, where the amplitudes determine measurement probabilities."""
+**Superposition** means a qubit can be in a combination of |0⟩ and |1⟩ before measurement.
 
-    if 'superposition' in q:
-        return """### Superposition
+The Hadamard gate can create an equal superposition:
+**|0⟩ → (|0⟩ + |1⟩)/√2**.
+"""
+    if "entanglement" in q or "entangled" in q:
+        return """### What is Quantum Entanglement?
 
-Superposition means a qubit can be in a combination of basis states before measurement. The Hadamard gate can create **(|0⟩ + |1⟩)/√2** from |0⟩."""
+**Quantum entanglement** is a quantum correlation between two or more qubits where their joint state cannot be described as independent states.
 
-    if 'entanglement' in q or 'entangled' in q:
-        return """### Quantum Entanglement
+A common Bell-state circuit uses **H + CNOT**.
+"""
+    if "cnot" in q or "controlled not" in q:
+        return """### What is a CNOT Gate?
 
-Entanglement is a quantum correlation in which the joint state of multiple qubits cannot be described as independent states. H followed by CNOT is a common way to create a Bell state."""
+**CNOT (Controlled-NOT)** is a two-qubit gate. The target qubit flips when the control qubit is |1⟩.
 
-    if 'cnot' in q or 'controlled not' in q:
-        return """### CNOT Gate
+Example: **|10⟩ → |11⟩**.
+"""
+    if "measurement" in q or "measure" in q:
+        return """### What is Quantum Measurement?
 
-CNOT is a two-qubit controlled operation. The target qubit flips when the control qubit is |1⟩. It is widely used for entanglement and quantum algorithms."""
+Measurement reads a quantum state and produces a classical result. For a qubit in superposition, repeated measurements reveal a probability distribution.
+"""
+    if "hadamard" in q or " h gate" in q or q.startswith("h gate"):
+        return """### What is the Hadamard Gate?
 
-    if 'measurement' in q or 'measure' in q:
-        return """### Quantum Measurement
+The **Hadamard (H) gate** creates superposition. For example:
+**|0⟩ → (|0⟩ + |1⟩)/√2**.
+"""
+    if "grover" in q:
+        return """### What is Grover's Algorithm?
 
-Measurement converts quantum information into a classical outcome. For a superposition, repeated measurements produce results according to the state's probability distribution."""
+Grover's algorithm is a quantum search algorithm for unstructured search problems. Its idealized query complexity is approximately **O(√N)**.
+"""
+    if "qft" in q or "quantum fourier transform" in q:
+        return """### What is QFT?
 
-    if 'hadamard' in q or 'h gate' in q:
-        return """### Hadamard Gate
+**QFT (Quantum Fourier Transform)** is the quantum analogue of the discrete Fourier transform and is used as a component of several quantum algorithms.
+"""
+    if "classical computer" in q and "quantum computer" in q:
+        return """### Classical Computer vs Quantum Computer
 
-The Hadamard (H) gate creates superposition. For example, **|0⟩ → (|0⟩ + |1⟩)/√2**."""
+Classical computers use bits, while quantum computers use qubits and quantum operations such as superposition, interference and entanglement. Quantum computers are not automatically faster for every problem; the advantage depends on the algorithm and problem structure.
+"""
 
-    if 'grover' in q:
-        return """### Grover's Algorithm
+    topic = local_topic_detection(question)
+    if topic != "General":
+        return workflow_explain(topic)
 
-Grover's algorithm is a quantum search algorithm for unstructured search. Its idealized query complexity is approximately **O(√N)**."""
+    return """### AI Tutor
 
-    if 'qft' in q or 'quantum fourier transform' in q:
-        return """### Quantum Fourier Transform
-
-QFT is the quantum analogue of the discrete Fourier transform and is an important component of algorithms such as phase estimation and Shor's algorithm."""
-
-    if 'classical' in q and 'quantum' in q:
-        return """### Classical vs Quantum Computing
-
-Classical computers use bits and classical logic gates. Quantum computers use qubits and quantum gates and can exploit superposition, entanglement and interference. Quantum computing is designed for specific problem classes rather than being a universal replacement for classical computing."""
-
-    return f"""### AI Tutor
-
-Gemini is temporarily unavailable, so the platform cannot generate a full AI response for this question right now.
-
-**Your question:** {question}
-
-Try again shortly; the Gemini connection is configured to retry temporary service errors automatically."""
+Gemini is temporarily unavailable for this question. Please try again in a moment. The platform will return a direct AI answer when the service is available.
+"""
 
 
 # ============================================================
@@ -515,51 +494,31 @@ Try again shortly; the Gemini connection is configured to retry temporary servic
 
 def ask_gemini(question):
 
-    """Answer the user's exact question with Gemini 2.5 Flash.
-
-    Important: this function never substitutes a keyword-based fixed
-    answer for the user's question. If Gemini is unavailable, it returns
-    a clear service-error message instead.
-    """
-
-    clean_question = question.strip()
-
     prompt = f"""
-You are Quantum LearnLab AI Tutor.
-
-Answer the user's EXACT question below. Do not replace the question with
-a generic topic explanation and do not assume that the user asked a
-different question.
+You are an AI tutor inside an interactive quantum computing
+learning platform.
 
 User question:
-{clean_question}
+{question}
 
-Instructions:
-- Directly answer exactly what the user asked.
-- Use simple technical English suitable for a beginner B.Tech student.
-- Keep the answer focused on the question.
-- Use headings or bullet points when they improve clarity.
-- Give an example when useful.
-- If the question has multiple parts, answer every part.
-- If the question is ambiguous, briefly state the ambiguity and answer
-  the most reasonable interpretation.
-- Do not output a topic label instead of an answer.
+Explain the answer in simple technical English.
+
+Requirements:
+- Beginner friendly
+- Technically correct
+- Use short sections
+- Use bullet points where useful
+- Give a simple example
+- Focus on quantum computing
 """
 
-    answer = generate_gemini(prompt, attempts=3)
+    answer = generate_gemini(prompt)
 
     if answer:
         return answer
 
-    error = st.session_state.get("gemini_last_error", "")
-    detail = f"\n\n**Technical detail:** `{error}`" if error else ""
-    return (
-        "### Gemini could not generate the answer\n\n"
-        "I could not generate an answer to your exact question right now. "
-        "The app tried Gemini 2.5 Flash and the configured fallback models. "
-        "Please try again shortly.\n\n"
-        "**Your question:** " + clean_question + detail
-    )
+    # Gemini unavailable → answer the actual question locally
+    return local_question_answer(question)
 
 
 # ============================================================
@@ -899,521 +858,142 @@ def simulate_circuit(qc, shots=512):
 # CIRCUIT BUILDER
 # ============================================================
 
+def build_drag_drop_circuit(num_qubits, gate_sequence):
+
+    qc = QuantumCircuit(num_qubits, num_qubits)
+
+    for gate in gate_sequence:
+        if gate == "H":
+            qc.h(0)
+        elif gate == "X":
+            qc.x(0)
+        elif gate == "Y":
+            qc.y(0)
+        elif gate == "Z":
+            qc.z(0)
+        elif gate == "S":
+            qc.s(0)
+        elif gate == "T":
+            qc.t(0)
+        elif gate == "CNOT":
+            if num_qubits >= 2:
+                qc.cx(0, 1)
+        elif gate == "CZ":
+            if num_qubits >= 2:
+                qc.cz(0, 1)
+        elif gate == "SWAP":
+            if num_qubits >= 2:
+                qc.swap(0, 1)
+
+    qc.measure(range(num_qubits), range(num_qubits))
+    return qc
+
+
 def render_circuit_builder():
 
     st.title("🔧 Circuit Builder")
-
-    st.write(
-        "Create and simulate a simple quantum circuit."
-    )
+    st.write("Build a quantum circuit by dragging gates into the circuit area.")
 
     col1, col2 = st.columns(2)
-
     with col1:
-
-        num_qubits = st.number_input(
-            "Number of qubits",
-            min_value=1,
-            max_value=8,
-            value=2,
-            step=1
-        )
-
+        num_qubits = st.number_input("Number of qubits", min_value=1, max_value=8, value=2, step=1)
     with col2:
+        shots = st.number_input("Shots", min_value=1, max_value=10000, value=512, step=1)
 
-        shots = st.number_input(
-            "Shots",
-            min_value=1,
-            max_value=10000,
-            value=512,
-            step=1
-        )
+    if "drag_gate_sequence" not in st.session_state:
+        st.session_state.drag_gate_sequence = []
 
-    if (
-        "builder_qc" not in st.session_state
-        or
-        st.session_state.builder_qc.num_qubits != num_qubits
-    ):
+    if "builder_counts" not in st.session_state:
+        st.session_state.builder_counts = None
 
-        st.session_state.builder_qc = QuantumCircuit(
-            num_qubits,
-            num_qubits
-        )
-
-    qc = st.session_state.builder_qc
-
-    st.subheader("Add Gate")
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        gate = st.selectbox(
-            "Gate",
-            [
-                "H",
-                "X",
-                "Y",
-                "Z",
-                "CX"
-            ]
-        )
-
-    with col2:
-
-        qubit_1 = st.number_input(
-            "Qubit 1",
-            min_value=0,
-            max_value=num_qubits - 1,
-            value=0
-        )
-
-    with col3:
-
-        qubit_2 = st.number_input(
-            "Qubit 2",
-            min_value=0,
-            max_value=num_qubits - 1,
-            value=min(1, num_qubits - 1)
-        )
-
-    if st.button(
-        "➕ Add Gate",
-        use_container_width=True
-    ):
-
-        try:
-
-            if gate == "H":
-                qc.h(qubit_1)
-
-            elif gate == "X":
-                qc.x(qubit_1)
-
-            elif gate == "Y":
-                qc.y(qubit_1)
-
-            elif gate == "Z":
-                qc.z(qubit_1)
-
-            elif gate == "CX":
-
-                if num_qubits < 2:
-
-                    st.warning(
-                        "CX requires at least 2 qubits."
-                    )
-
-                elif qubit_1 == qubit_2:
-
-                    st.warning(
-                        "Control and target must be different."
-                    )
-
-                else:
-
-                    qc.cx(
-                        qubit_1,
-                        qubit_2
-                    )
-
-            st.session_state.builder_qc = qc
-
-        except Exception as e:
-
-            st.error(str(e))
-
-    st.subheader("Circuit")
-
-    st.code(
-        str(qc.draw(output="text")),
-        language="text"
-    )
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        if st.button(
-            "▶️ Simulate",
-            use_container_width=True
-        ):
-
-            counts = simulate_circuit(
-                qc,
-                shots
-            )
-
-            if counts:
-
-                st.session_state.builder_counts = counts
-
-    with col2:
-
-        if st.button(
-            "🗑️ Clear",
-            use_container_width=True
-        ):
-
-            st.session_state.builder_qc = QuantumCircuit(
-                num_qubits,
-                num_qubits
-            )
-
-            st.session_state.builder_counts = None
-
-            st.rerun()
-
-    counts = st.session_state.get(
-        "builder_counts",
-        None
-    )
-
-    if counts:
-
-        st.subheader("Measurement Results")
-
-        df = pd.DataFrame(
-            {
-                "State": list(counts.keys()),
-                "Count": list(counts.values())
-            }
-        )
-
-        st.bar_chart(
-            df.set_index("State")
-        )
-
-
-# ============================================================
-# FIX MY CIRCUIT
-# ============================================================
-
-def render_fix_circuit():
-
-    st.title("🛠️ Fix My Circuit")
-
-    st.write(
-        "Describe your circuit problem and the AI tutor "
-        "will suggest a correction."
-    )
-
-    question = st.text_area(
-        "What is wrong with your circuit?",
-        placeholder=(
-            "Example: My CNOT circuit is not producing "
-            "the expected Bell state."
-        )
-    )
-
-    if st.button(
-        "🤖 Analyze Circuit",
-        use_container_width=True
-    ):
-
-        if not question.strip():
-
-            st.warning(
-                "Please enter a circuit problem."
-            )
-
-            return
-
-        prompt = f"""
-You are a quantum computing tutor.
-
-Analyze this circuit problem:
-
-{question}
-
-Give:
-1. Possible cause
-2. Explanation
-3. Correct approach
-4. Simple Qiskit example
-"""
-
-        answer = generate_gemini(prompt)
-
-        if answer:
-
-            st.markdown(answer)
-
-        else:
-
-            st.info(
-                "Gemini is temporarily unavailable. "
-                "Please try again after a short time."
-            )
-
-
-# ============================================================
-# AI TUTOR
-# ============================================================
-
-def render_ai_tutor():
-
-    st.title("🤖 AI Tutor")
-
-    question = st.text_area(
-        "Ask any quantum computing question",
-        placeholder=(
-            "Example: What is the difference between "
-            "a classical computer and a quantum computer?"
-        ),
-        height=150
-    )
-
-    if st.button(
-        "Ask Gemini",
-        use_container_width=True
-    ):
-
-        if not question.strip():
-
-            st.warning(
-                "Please enter a question."
-            )
-
-            return
-
-        answer = ask_gemini(question)
-
-        st.session_state.ai_answer = answer
-
-    if st.session_state.ai_answer:
-
-        st.subheader("AI Answer")
-
-        st.markdown(
-            st.session_state.ai_answer
-        )
-
-
-# ============================================================
-# VISUALIZATION
-# ============================================================
-
-def render_visualization():
-
-    st.title("📊 Visualization")
-
-    qc = st.session_state.get(
-        "workflow_circuit"
-    )
-
-    counts = st.session_state.get(
-        "workflow_simulation"
-    )
-
-    if qc is None:
-
-        st.info(
-            "Complete the workflow BUILD stage first."
-        )
-
+    if not SORTABLES_AVAILABLE:
+        st.error("Drag-and-drop support requires streamlit-sortables. Add streamlit-sortables to requirements.txt.")
         return
 
-    st.subheader("Quantum Circuit")
+    st.subheader("Drag Gates → Circuit")
 
-    st.code(
-        str(qc.draw(output="text")),
-        language="text"
+    available_gates = ["H", "X", "Y", "Z", "S", "T", "CNOT", "CZ", "SWAP"]
+    current = st.session_state.drag_gate_sequence
+
+    containers = [
+        {"header": "🧩 Gate Palette", "items": available_gates},
+        {"header": "⚛️ Circuit — drag gates here", "items": current}
+    ]
+
+    custom_style = """
+    .sortable-component { border-radius: 12px; }
+    .sortable-container { min-height: 90px; }
+    .sortable-item { font-weight: 700; border-radius: 8px; margin: 5px; }
+    """
+
+    result = sort_items(
+        containers,
+        multi_containers=True,
+        direction="horizontal",
+        custom_style=custom_style,
+        key="quantum_drag_drop_builder"
     )
 
+    if isinstance(result, list) and len(result) == 2:
+        circuit_items = result[1].get("items", [])
+        # Palette items are intentionally ignored; only items dropped into
+        # the Circuit container become operations.
+        st.session_state.drag_gate_sequence = [
+            item for item in circuit_items if item in available_gates
+        ]
+
+    gate_sequence = st.session_state.drag_gate_sequence
+
+    st.subheader("Current Circuit")
+    if gate_sequence:
+        st.write(" → ".join(gate_sequence))
+    else:
+        st.info("Drag gates from the Gate Palette into the Circuit area.")
+
+    qc = build_drag_drop_circuit(num_qubits, gate_sequence)
+
+    st.code(str(qc.draw(output="text")), language="text")
+
+    st.subheader("Circuit Explanation")
+    if not gate_sequence:
+        st.write("Add gates to see how the circuit works.")
+    else:
+        explanations = {
+            "H": "H creates an equal superposition of |0⟩ and |1⟩.",
+            "X": "X flips the qubit: |0⟩ ↔ |1⟩.",
+            "Y": "Y performs a bit flip together with a phase change.",
+            "Z": "Z changes the phase of |1⟩ without changing measurement probabilities.",
+            "S": "S applies a phase shift of π/2.",
+            "T": "T applies a phase shift of π/4.",
+            "CNOT": "CNOT uses qubit 0 as control and flips qubit 1 when the control is 1.",
+            "CZ": "CZ applies a phase flip to |11⟩ when both qubits are 1.",
+            "SWAP": "SWAP exchanges the quantum states of qubit 0 and qubit 1."
+        }
+        for i, gate in enumerate(gate_sequence, 1):
+            st.write(f"**Step {i} — {gate}:** {explanations[gate]}")
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("▶️ Simulate", use_container_width=True):
+            counts = simulate_circuit(qc, shots)
+            if counts:
+                st.session_state.builder_counts = counts
+    with col2:
+        if st.button("🗑️ Clear Circuit", use_container_width=True):
+            st.session_state.drag_gate_sequence = []
+            st.session_state.builder_counts = None
+            st.rerun()
+    with col3:
+        if st.button("↩️ Remove Last", use_container_width=True):
+            if st.session_state.drag_gate_sequence:
+                st.session_state.drag_gate_sequence.pop()
+                st.session_state.builder_counts = None
+                st.rerun()
+
+    counts = st.session_state.builder_counts
     if counts:
-
-        st.subheader("Measurement Distribution")
-
-        states = list(counts.keys())
-        values = list(counts.values())
-
-        fig, ax = plt.subplots()
-
-        ax.bar(
-            states,
-            values
-        )
-
-        ax.set_xlabel(
-            "Measured State"
-        )
-
-        ax.set_ylabel(
-            "Counts"
-        )
-
-        ax.set_title(
-            "Quantum Measurement Results"
-        )
-
-        st.pyplot(fig)
-
-        plt.close(fig)
-
-
-# ============================================================
-# QUIZ
-# ============================================================
-
-QUIZ_DATA = [
-
-    {
-        "question": "What is the basic unit of quantum information?",
-        "options": [
-            "Bit",
-            "Qubit",
-            "Byte",
-            "Register"
-        ],
-        "answer": "Qubit"
-    },
-
-    {
-        "question": "Which gate is commonly used to create superposition?",
-        "options": [
-            "X",
-            "Z",
-            "H",
-            "CX"
-        ],
-        "answer": "H"
-    },
-
-    {
-        "question": "Which gate is used to create two-qubit entanglement?",
-        "options": [
-            "CNOT",
-            "X",
-            "Z",
-            "T"
-        ],
-        "answer": "CNOT"
-    },
-
-    {
-        "question": "What does QFT stand for?",
-        "options": [
-            "Quantum Fast Technology",
-            "Quantum Fourier Transform",
-            "Quantum Function Theory",
-            "Quantum Frequency Tool"
-        ],
-        "answer": "Quantum Fourier Transform"
-    },
-
-    {
-        "question": "What happens during quantum measurement?",
-        "options": [
-            "Quantum state becomes a classical result",
-            "Qubit disappears",
-            "Computer shuts down",
-            "Nothing happens"
-        ],
-        "answer": "Quantum state becomes a classical result"
-    }
-]
-
-
-def render_quiz():
-
-    st.title("📝 Quantum Quiz")
-
-    score = 0
-
-    for i, item in enumerate(QUIZ_DATA):
-
-        st.subheader(
-            f"Q{i + 1}. {item['question']}"
-        )
-
-        answer = st.radio(
-            "Select an answer:",
-            item["options"],
-            key=f"quiz_{i}"
-        )
-
-        if answer == item["answer"]:
-            score += 1
-
-    if st.button(
-        "Submit Quiz",
-        use_container_width=True
-    ):
-
-        st.session_state.quiz_score = score
-
-        earned = score * 10
-
-        st.session_state.points += earned
-
-        if score == len(QUIZ_DATA):
-
-            if "Quantum Master" not in st.session_state.badges:
-
-                st.session_state.badges.append(
-                    "Quantum Master"
-                )
-
-        save_profile()
-
-        st.success(
-            f"Score: {score}/{len(QUIZ_DATA)}"
-        )
-
-        st.info(
-            f"You earned {earned} points."
-        )
-
-
-# ============================================================
-# LEARN
-# ============================================================
-
-def render_learn():
-
-    st.title("📚 Learn Quantum Computing")
-
-    topic = st.selectbox(
-        "Choose a topic",
-        TOPICS
-    )
-
-    st.markdown(
-        workflow_explain(topic)
-    )
-
-    st.divider()
-
-    if st.button(
-        "Build Example Circuit",
-        use_container_width=True
-    ):
-
-        qc = workflow_build_circuit(
-            topic
-        )
-
-        st.code(
-            str(qc.draw(output="text")),
-            language="text"
-        )
-
-        counts = simulate_circuit(
-            qc,
-            512
-        )
-
-        if counts:
-
-            st.bar_chart(
-                pd.DataFrame(
-                    {
-                        "State": list(counts.keys()),
-                        "Count": list(counts.values())
-                    }
-                ).set_index("State")
-            )
+        st.subheader("Measurement Results")
+        st.json(counts)
 
 
 # ============================================================
@@ -1423,43 +1003,86 @@ def render_learn():
 def render_algorithms():
 
     st.title("🧠 Quantum Algorithms")
+    st.write("Your algorithm learning section is kept with explanation, circuit and circuit explanation.")
 
     algorithm = st.selectbox(
         "Select algorithm",
-        [
-            "Grover Search",
-            "QFT",
-            "VQE",
-            "QAOA"
-        ]
+        ["Grover Search", "QFT", "VQE", "QAOA"]
     )
 
-    explanations = {
-
-        "Grover Search": """
-Grover's algorithm searches an unstructured search space
-with approximately O(√N) oracle queries.
-""",
-
-        "QFT": """
-Quantum Fourier Transform transforms amplitudes between
-computational and Fourier-like bases.
-""",
-
-        "VQE": """
-VQE is a hybrid quantum-classical algorithm used for
-optimization problems such as estimating molecular energies.
-""",
-
-        "QAOA": """
-QAOA is a hybrid quantum-classical algorithm designed
-for approximate combinatorial optimization.
-"""
+    algorithm_data = {
+        "Grover Search": {
+            "explanation": "Grover's algorithm searches an unstructured search space with approximately O(√N) oracle queries.",
+            "circuit": "H → Oracle → Diffusion → Measurement",
+            "circuit_explanation": "Hadamard gates create the initial superposition. The Oracle marks the target state, and the diffusion operation amplifies its probability. Measurement returns the searched state.",
+            "qc": None
+        },
+        "QFT": {
+            "explanation": "Quantum Fourier Transform transforms amplitudes into the Fourier basis and is used in several quantum algorithms.",
+            "circuit": "H → Controlled Phase → H → SWAP",
+            "circuit_explanation": "Hadamard and controlled-phase operations build the Fourier-basis transformation. SWAP operations reverse the qubit order when required.",
+            "qc": None
+        },
+        "VQE": {
+            "explanation": "VQE is a hybrid quantum-classical algorithm that uses a parameterized circuit and a classical optimizer to estimate an objective such as molecular energy.",
+            "circuit": "Parameterized Ansatz → Measurement → Classical Optimizer",
+            "circuit_explanation": "The ansatz prepares a parameterized quantum state. Measurements estimate the objective function, and a classical optimizer updates the circuit parameters.",
+            "qc": None
+        },
+        "QAOA": {
+            "explanation": "QAOA is a hybrid quantum-classical algorithm for approximate combinatorial optimization.",
+            "circuit": "Initial State → Cost Hamiltonian → Mixer → Measurement",
+            "circuit_explanation": "The cost layer encodes the optimization problem, while the mixer explores candidate states. Repeated parameter optimization improves the measured objective.",
+            "qc": None
+        }
     }
 
-    st.markdown(
-        explanations[algorithm]
-    )
+    data = algorithm_data[algorithm]
+
+    # Existing user-added figures should remain above/below this section in
+    # the user's original file. This block does not replace them with a new image.
+    st.markdown("### Algorithm Explanation")
+    st.markdown(data["explanation"])
+
+    st.divider()
+    st.subheader("Quantum Circuit")
+    st.code(data["circuit"], language="text")
+
+    st.subheader("Circuit Explanation")
+    st.info(data["circuit_explanation"])
+
+    if algorithm == "Grover Search":
+        qc = QuantumCircuit(2, 2)
+        qc.h([0, 1])
+        qc.cz(0, 1)
+        qc.h([0, 1])
+        qc.measure([0, 1], [0, 1])
+    elif algorithm == "QFT":
+        qc = QuantumCircuit(2, 2)
+        qc.h(0)
+        qc.cp(np.pi / 2, 0, 1)
+        qc.h(1)
+        qc.swap(0, 1)
+        qc.measure([0, 1], [0, 1])
+    elif algorithm == "VQE":
+        qc = QuantumCircuit(2, 2)
+        qc.ry(np.pi / 4, 0)
+        qc.cx(0, 1)
+        qc.measure([0, 1], [0, 1])
+    else:
+        qc = QuantumCircuit(2, 2)
+        qc.h([0, 1])
+        qc.rzz(np.pi / 4, 0, 1)
+        qc.measure([0, 1], [0, 1])
+
+    st.subheader("Executable Circuit Example")
+    st.code(str(qc.draw(output="text")), language="text")
+
+    if st.button("▶️ Simulate Algorithm Circuit", use_container_width=True, key=f"simulate_algorithm_{algorithm}"):
+        counts = simulate_circuit(qc, 512)
+        if counts:
+            st.subheader("Simulation Result")
+            st.json(counts)
 
 
 # ============================================================
@@ -1568,14 +1191,11 @@ def render_workflow():
 
             else:
 
-                # First answer the EXACT question with Gemini.
-                # Topic detection is only used afterwards for the learning
-                # path and related circuit; it must never replace the answer.
-                answer = ask_gemini(
+                topic = workflow_topic_from_question(
                     question
                 )
 
-                topic = workflow_topic_from_question(
+                answer = ask_gemini(
                     question
                 )
 
@@ -2128,7 +1748,7 @@ Learn quantum computing through:
     )
 
     st.info(
-        "Gemini 2.5 Flash powers the AI tutor. "
+        "Gemini 3.6 Flash powers the AI tutor. "
         "If Gemini is temporarily unavailable, "
         "the platform uses local fallback explanations "
         "and circuit generation."
