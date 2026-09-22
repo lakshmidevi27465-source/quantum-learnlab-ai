@@ -9,8 +9,11 @@ import time
 
 from pathlib import Path
 from supabase import create_client
-#from qiskit import QuantumCircuit, transpile
-#from qiskit_aer import AerSimulator
+def get_qiskit():
+    from qiskit import QuantumCircuit, transpile
+    from qiskit_aer import AerSimulator
+
+    return QuantumCircuit, transpile, AerSimulator
 
 
 # ============================================================
@@ -90,10 +93,6 @@ for key, value in DEFAULT_SESSION_STATE.items():
         if isinstance(value, list):
 
             st.session_state[key] = value.copy()
-
-        elif isinstance(value, QuantumCircuit):
-
-            st.session_state[key] = QuantumCircuit(2)
 
         else:
 
@@ -737,6 +736,9 @@ and provide an introductory quantum circuit example.
 # ============================================================
 
 def workflow_build_circuit(topic):
+    
+    QuantumCircuit, _, _ = get_qiskit()
+
 
     if topic == "Qubit":
 
@@ -909,6 +911,7 @@ def simulate_circuit(
 ):
 
     try:
+          _, transpile, AerSimulator = get_qiskit()
 
         simulator = AerSimulator()
 
@@ -1445,6 +1448,8 @@ def render_learn():
 # ============================================================
 
 def render_algorithms():
+    QuantumCircuit, _, _ = get_qiskit()
+
 
     st.title(
         "🧠 Quantum Algorithms"
