@@ -1,43 +1,32 @@
 import streamlit as st
+from google import genai
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import hashlib
 import json
 from pathlib import Path
-
 from supabase import create_client, Client
-
 from qiskit import QuantumCircuit, transpile
 from qiskit_aer import AerSimulator
-
-
 # =========================================================
 # PAGE CONFIGURATION
 # =========================================================
-
 st.set_page_config(
     page_title="Quantum LearnLab AI",
     page_icon="⚛️",
     layout="wide"
 )
-
-
 # =========================================================
 # FILE PATHS
 # =========================================================
-
 ASSETS_DIR = Path("assets")
-
 FIG_QUBIT = ASSETS_DIR / "fig1_qubit_superposition.png"
 FIG_ENTANGLEMENT = ASSETS_DIR / "fig3_entanglement_teleportation.png"
 FIG_CIRCUIT = ASSETS_DIR / "fig4_hadamard_cnot_circuit.png"
-
-
 # =========================================================
 # SUPABASE AUTHENTICATION + PERSISTENT DATA
 # =========================================================
-
 @st.cache_resource
 def get_supabase() -> Client:
     url = st.secrets.get("SUPABASE_URL", "")
@@ -45,8 +34,6 @@ def get_supabase() -> Client:
     if not url or not key:
         return None
     return create_client(url, key)
-
-
 def load_profile(user_id):
     sb = get_supabase()
     if sb is None:
@@ -58,8 +45,6 @@ def load_profile(user_id):
     except Exception as e:
         st.error(f"Could not load your profile: {e}")
     return None
-
-
 def save_profile():
     user_id = st.session_state.get("user_id", "")
     if not user_id:
@@ -80,8 +65,6 @@ def save_profile():
         sb.table("profiles").upsert(data).execute()
     except Exception as e:
         st.warning(f"Progress could not be saved: {e}")
-
-
 def load_user_progress(user_id):
     profile = load_profile(user_id)
     if not profile:
@@ -92,14 +75,10 @@ def load_user_progress(user_id):
     st.session_state.points = int(profile.get("points") or 0)
     st.session_state.badges = profile.get("badges") or []
     st.session_state.history = profile.get("history") or []
-
-
 def require_supabase():
     if get_supabase() is None:
         st.error("Supabase is not configured. Add SUPABASE_URL and SUPABASE_KEY to Streamlit Secrets.")
         st.stop()
-
-
 def sign_in(email, password):
     sb = get_supabase()
     if sb is None:
@@ -109,8 +88,6 @@ def sign_in(email, password):
         return result, None
     except Exception as e:
         return None, str(e)
-
-
 def sign_up(email, password, name):
     sb = get_supabase()
     if sb is None:
@@ -124,8 +101,6 @@ def sign_up(email, password, name):
         return result, None
     except Exception as e:
         return None, str(e)
-
-
 def sign_out():
     sb = get_supabase()
     if sb is not None:
@@ -133,56 +108,39 @@ def sign_out():
             sb.auth.sign_out()
         except Exception:
             pass
-
-
 # =========================================================
 # SESSION STATE
 # =========================================================
-
-
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
-
 if "user_id" not in st.session_state:
     st.session_state.user_id = ""
-
 if "user_email" not in st.session_state:
     st.session_state.user_email = ""
-
 if "user_name" not in st.session_state:
     st.session_state.user_name = ""
-
 if "completed" not in st.session_state:
     st.session_state.completed = []
-
 if "quiz_score" not in st.session_state:
     st.session_state.quiz_score = 0
-
 if "points" not in st.session_state:
     st.session_state.points = 0
-
 if "badges" not in st.session_state:
     st.session_state.badges = []
-
 if "history" not in st.session_state:
     st.session_state.history = []
-
-
 # =========================================================
 # CUSTOM CSS
 # =========================================================
-
 st.markdown(
     """
     <style>
-
     .main-title {
         font-size: 42px;
         font-weight: bold;
         text-align: center;
         margin-bottom: 10px;
     }
-
     .subtitle {
         text-align: center;
         font-size: 20px;
@@ -364,6 +322,75 @@ page = st.sidebar.radio(
     ],
     index=0
 )
+# =========================================================
+# GEMINI 2.5 FLASH AI
+# =========================================================
+
+@st.cache_resource
+def get_gemini_client():
+    """Create Gemini client using Streamlit Secrets."""
+    api_key = st.secrets.get("GEMINI_API_KEY", "")
+
+    if not api_key:
+        return None
+
+    return genai.Client(api_key=api_key)
+
+
+def ask_gemini(question):
+    """Send any learner question to Gemini 2.5 Flash."""
+
+    client = get_gemini_client()
+
+    if client is None:
+        return None, "GEMINI_API_KEY is not configured in Streamlit Secrets."
+
+    if not question or not question.strip():
+        return None, "Please enter a question."
+
+    prompt = f"""
+You are Quantum LearnLab AI, an interactive quantum-computing tutor.
+
+Answer the user's question clearly and accurately in simple technical English.
+
+Use:
+- Short sections
+- Bullet points
+- Simple examples
+- Equations when useful
+
+For quantum-computing questions, focus on:
+- Qubits
+- Quantum gates
+- Quantum circuits
+- Quantum algorithms
+- Qiskit
+- Quantum simulation
+- Quantum visualization
+- Quantum concepts
+
+If the question is outside quantum computing, answer briefly and politely
+explain that the platform is mainly focused on quantum computing.
+
+User question:
+{question.strip()}
+"""
+
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt
+        )
+
+        answer = getattr(response, "text", None)
+
+        if not answer:
+            return None, "Gemini returned an empty response."
+
+        return answer, None
+
+    except Exception as e:
+        return None, f"{type(e).__name__}: {e}"
 
 
 # =========================================================
@@ -586,7 +613,12 @@ def render_workflow():
             else:
                 st.session_state.workflow_question = question.strip()
                 st.session_state.workflow_topic = workflow_topic_from_question(question)
-                st.session_state.workflow_explanation = workflow_explain(st.session_state.workflow_topic)
+                answer, error = ask_gemini(question)
+
+                        if error:
+                            st.error(f"Gemini Error: {error}")
+                        else:
+                            st.session_state.workflow_explanation = answer
                 st.session_state.workflow_simulation = None
                 st.session_state.workflow_score = None
                 st.session_state.workflow_stage = "EXPLAIN"
@@ -2141,107 +2173,27 @@ elif page == "🤖 AI Tutor":
         "Ask questions about quantum computing."
     )
 
-
     question = st.text_input(
         "Ask your question"
     )
-
 
     if st.button(
         "💡 Ask AI"
     ):
 
-        q = question.lower()
-
-
-        if "qubit" in q:
-
-            answer = """
-A qubit is the basic unit of quantum information.
-
-A classical bit can be 0 or 1, while a qubit can exist
-in a superposition of |0⟩ and |1⟩.
-"""
-
-
-        elif "superposition" in q:
-
-            answer = """
-Superposition means that a quantum system can be
-represented as a combination of multiple basis states
-until measurement.
-"""
-
-
-        elif "entanglement" in q:
-
-            answer = """
-Quantum entanglement is a correlation between quantum
-systems where their states cannot be described independently.
-"""
-
-
-        elif (
-            "hadamard" in q
-            or "h gate" in q
-        ):
-
-            answer = """
-The Hadamard gate creates an equal superposition from |0⟩:
-
-|0⟩ → (|0⟩ + |1⟩) / √2
-"""
-
-
-        elif "cnot" in q:
-
-            answer = """
-CNOT is a controlled-NOT gate.
-
-If the control qubit is |1⟩,
-the target qubit is flipped.
-"""
-
-
-        elif "grover" in q:
-
-            answer = """
-Grover's algorithm searches an unstructured space
-with a quadratic speedup compared with classical search.
-"""
-
-
-        elif "qiskit" in q:
-
-            answer = """
-Qiskit is an open-source framework used to create,
-simulate and run quantum circuits.
-"""
-
+        if not question.strip():
+            st.warning("Please enter a question.")
 
         else:
+            answer, error = ask_gemini(question)
 
-            answer = """
-I can help with:
+            if error:
+                st.error(
+                    f"Gemini Error: {error}"
+                )
 
-• Qubits
-• Superposition
-• Entanglement
-• Quantum gates
-• Qiskit
-• Quantum algorithms
-• Quantum circuits
-• Measurement
-
-Try asking one of these topics.
-"""
-
-
-        st.success(
-            answer
-        )
-
-
+            else:
+                st.markdown(answer)
 # =========================================================
 # QUIZ
 # =========================================================
