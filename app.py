@@ -352,6 +352,7 @@ page = st.sidebar.radio(
         "🚀 Learning Workflow",
         "🏠 Home",
         "📚 Learn",
+        "📖 Gate Learning",
         "⚛️ Circuit Builder",
         "🧪 Quantum Algorithms",
         "📊 Visualization",
@@ -768,7 +769,7 @@ elif page == "🏠 Home":
 
         "Interactive quantum learning modules",
 
-        "Select-and-add quantum circuit builder with gate learning",
+        "Select-and-add quantum circuit builder",
 
         "Qiskit simulation",
 
@@ -797,6 +798,166 @@ elif page == "🏠 Home":
             "✅",
             feature
         )
+
+
+# =========================================================
+# GATE LEARNING
+# =========================================================
+
+GATE_INFO = {
+    "H": {
+        "name": "Hadamard Gate",
+        "description": "The H gate creates an equal superposition from |0⟩ or |1⟩. It is commonly used at the beginning of quantum algorithms.",
+        "matrix": "1/√2 × [[1, 1], [1, -1]]",
+        "input_output": "|0⟩ → |+⟩ = (|0⟩ + |1⟩)/√2\n|1⟩ → |-⟩ = (|0⟩ - |1⟩)/√2",
+        "use": "Creates superposition and is widely used in algorithms such as Deutsch-Jozsa and Grover's algorithm.",
+        "example": "q0: ──H──",
+        "qubits": 1,
+    },
+    "X": {
+        "name": "Pauli-X Gate",
+        "description": "The X gate flips the computational-basis state, similar to a classical NOT operation.",
+        "matrix": "[[0, 1], [1, 0]]",
+        "input_output": "|0⟩ → |1⟩\n|1⟩ → |0⟩",
+        "use": "Bit-flip operation and preparation of the |1⟩ state.",
+        "example": "q0: ──X──",
+        "qubits": 1,
+    },
+    "Y": {
+        "name": "Pauli-Y Gate",
+        "description": "The Y gate changes the qubit state with both a bit-flip and a phase change.",
+        "matrix": "[[0, -i], [i, 0]]",
+        "input_output": "|0⟩ → i|1⟩\n|1⟩ → -i|0⟩",
+        "use": "Performs a quantum rotation around the Y axis of the Bloch sphere.",
+        "example": "q0: ──Y──",
+        "qubits": 1,
+    },
+    "Z": {
+        "name": "Pauli-Z Gate",
+        "description": "The Z gate leaves |0⟩ unchanged and adds a phase of -1 to |1⟩.",
+        "matrix": "[[1, 0], [0, -1]]",
+        "input_output": "|0⟩ → |0⟩\n|1⟩ → -|1⟩",
+        "use": "Phase flip and phase manipulation in quantum circuits.",
+        "example": "q0: ──Z──",
+        "qubits": 1,
+    },
+    "S": {
+        "name": "S Gate",
+        "description": "The S gate applies a 90° phase shift to the |1⟩ component of a qubit.",
+        "matrix": "[[1, 0], [0, i]]",
+        "input_output": "|0⟩ → |0⟩\n|1⟩ → i|1⟩",
+        "use": "Phase rotation and phase-sensitive quantum algorithms.",
+        "example": "q0: ──S──",
+        "qubits": 1,
+    },
+    "T": {
+        "name": "T Gate",
+        "description": "The T gate applies a 45° phase shift to the |1⟩ component.",
+        "matrix": "[[1, 0], [0, e^(iπ/4)]]",
+        "input_output": "|0⟩ → |0⟩\n|1⟩ → e^(iπ/4)|1⟩",
+        "use": "Fine phase control and universal quantum gate constructions.",
+        "example": "q0: ──T──",
+        "qubits": 1,
+    },
+    "CNOT": {
+        "name": "Controlled-NOT Gate",
+        "description": "CNOT is a two-qubit gate. It flips the target qubit only when the control qubit is |1⟩.",
+        "matrix": "[[1,0,0,0],[0,1,0,0],[0,0,0,1],[0,0,1,0]]",
+        "input_output": "|00⟩ → |00⟩\n|01⟩ → |01⟩\n|10⟩ → |11⟩\n|11⟩ → |10⟩",
+        "use": "Creates entanglement and is a fundamental two-qubit operation.",
+        "example": "q0: ──●──\n      │\nq1: ──⊕──",
+        "qubits": 2,
+    },
+    "CZ": {
+        "name": "Controlled-Z Gate",
+        "description": "CZ applies a Z operation to the target when the control qubit is |1⟩. It changes the phase of |11⟩.",
+        "matrix": "diag(1, 1, 1, -1)",
+        "input_output": "|00⟩ → |00⟩\n|01⟩ → |01⟩\n|10⟩ → |10⟩\n|11⟩ → -|11⟩",
+        "use": "Controlled phase operations and entanglement-based circuits.",
+        "example": "q0: ──●──\n      │\nq1: ──Z──",
+        "qubits": 2,
+    },
+    "SWAP": {
+        "name": "SWAP Gate",
+        "description": "The SWAP gate exchanges the quantum states of two qubits.",
+        "matrix": "[[1,0,0,0],[0,0,1,0],[0,1,0,0],[0,0,0,1]]",
+        "input_output": "|00⟩ → |00⟩\n|01⟩ → |10⟩\n|10⟩ → |01⟩\n|11⟩ → |11⟩",
+        "use": "Moves or exchanges quantum states between qubit positions.",
+        "example": "q0: ──×──\n      │\nq1: ──×──",
+        "qubits": 2,
+    },
+}
+
+
+def gate_learning_circuit(gate):
+    info = GATE_INFO[gate]
+    qc = QuantumCircuit(info["qubits"])
+    if gate == "H": qc.h(0)
+    elif gate == "X": qc.x(0)
+    elif gate == "Y": qc.y(0)
+    elif gate == "Z": qc.z(0)
+    elif gate == "S": qc.s(0)
+    elif gate == "T": qc.t(0)
+    elif gate == "CNOT": qc.cx(0, 1)
+    elif gate == "CZ": qc.cz(0, 1)
+    elif gate == "SWAP": qc.swap(0, 1)
+    return qc
+
+
+def render_gate_learning():
+    st.title("📖 Gate Learning")
+    st.write("Select a quantum gate and learn its meaning, matrix, input-output behavior, use, and circuit example.")
+
+    selected_gate = st.selectbox(
+        "Select a gate to learn",
+        list(GATE_INFO.keys()),
+        key="gate_learning_selector",
+    )
+    info = GATE_INFO[selected_gate]
+
+    st.header(f"{selected_gate} — {info['name']}")
+    st.info(info["description"])
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("Matrix")
+        st.code(info["matrix"], language="text")
+    with col2:
+        st.subheader("Input → Output")
+        st.code(info["input_output"], language="text")
+
+    st.subheader("Main Use")
+    st.write(info["use"])
+
+    st.subheader("Circuit Example")
+    qc = gate_learning_circuit(selected_gate)
+    try:
+        st.pyplot(draw_circuit(qc))
+    except Exception:
+        st.code(qc.draw(output="text"), language="text")
+
+    st.subheader("Try This Gate")
+    if st.button(f"▶️ Try {selected_gate} Gate", use_container_width=True):
+        counts = run_circuit(qc, shots=512)
+        st.session_state.history.append({
+            "Circuit": str(qc),
+            "Result": counts,
+            "Gate Learning": selected_gate,
+        })
+        add_points(5)
+        check_badges()
+        st.write("Measurement Result")
+        st.write(counts)
+        st.success(f"{selected_gate} gate simulated successfully! +5 points")
+
+
+# =========================================================
+# LEARN
+# =========================================================
+
+elif page == "📖 Gate Learning":
+
+    render_gate_learning()
 
 
 # =========================================================
@@ -1284,260 +1445,170 @@ elif page == "📚 Learn":
 
 
 # =========================================================
-# CIRCUIT BUILDER + GATE LEARNING
+# CIRCUIT BUILDER
 # =========================================================
 
 elif page == "⚛️ Circuit Builder":
 
-    st.title("⚛️ Quantum Circuit Builder")
-    st.write(
-        "Build a circuit by selecting a gate and qubit. "
-        "No drag-and-drop is required."
+    st.title(
+        "⚛️ Quantum Circuit Builder"
     )
 
-    # --------------------------------------------------------
-    # Gate learning information
-    # --------------------------------------------------------
-    GATE_INFO = {
-        "H": {
-            "name": "Hadamard Gate (H)",
-            "type": "Single-qubit gate",
-            "description": "The Hadamard gate creates an equal superposition from a computational-basis state.",
-            "matrix": "1/√2 × [[1, 1], [1, -1]]",
-            "example": "|0⟩ → (|0⟩ + |1⟩)/√2",
-            "use": "Creating quantum superposition.",
-            "circuit": "q0: ──H──"
-        },
-        "X": {
-            "name": "Pauli-X Gate (X)",
-            "type": "Single-qubit gate",
-            "description": "The X gate flips the computational-basis state of a qubit.",
-            "matrix": "[[0, 1], [1, 0]]",
-            "example": "|0⟩ → |1⟩   and   |1⟩ → |0⟩",
-            "use": "Bit-flip operation.",
-            "circuit": "q0: ──X──"
-        },
-        "Y": {
-            "name": "Pauli-Y Gate (Y)",
-            "type": "Single-qubit gate",
-            "description": "The Y gate performs a bit flip together with a phase change.",
-            "matrix": "[[0, -i], [i, 0]]",
-            "example": "|0⟩ → i|1⟩   and   |1⟩ → -i|0⟩",
-            "use": "Bit and phase transformation.",
-            "circuit": "q0: ──Y──"
-        },
-        "Z": {
-            "name": "Pauli-Z Gate (Z)",
-            "type": "Single-qubit gate",
-            "description": "The Z gate changes the phase of |1⟩ while leaving |0⟩ unchanged.",
-            "matrix": "[[1, 0], [0, -1]]",
-            "example": "|0⟩ → |0⟩   and   |1⟩ → -|1⟩",
-            "use": "Phase-flip operation.",
-            "circuit": "q0: ──Z──"
-        },
-        "S": {
-            "name": "S Gate", 
-            "type": "Single-qubit gate",
-            "description": "The S gate applies a π/2 phase shift to the |1⟩ component.",
-            "matrix": "[[1, 0], [0, i]]",
-            "example": "|0⟩ → |0⟩   and   |1⟩ → i|1⟩",
-            "use": "Applying a 90° phase shift.",
-            "circuit": "q0: ──S──"
-        },
-        "T": {
-            "name": "T Gate",
-            "type": "Single-qubit gate",
-            "description": "The T gate applies a π/4 phase shift to the |1⟩ component.",
-            "matrix": "[[1, 0], [0, e^(iπ/4)]]",
-            "example": "|0⟩ → |0⟩   and   |1⟩ → e^(iπ/4)|1⟩",
-            "use": "Applying a 45° phase shift.",
-            "circuit": "q0: ──T──"
-        },
-        "CNOT": {
-            "name": "Controlled-NOT Gate (CNOT)",
-            "type": "Two-qubit gate",
-            "description": "CNOT flips the target qubit when the control qubit is |1⟩.",
-            "matrix": "[[1,0,0,0], [0,1,0,0], [0,0,0,1], [0,0,1,0]]",
-            "example": "|10⟩ → |11⟩   and   |11⟩ → |10⟩",
-            "use": "Conditional bit flip and entanglement demonstrations.",
-            "circuit": "q0: ──●──\n      │\nq1: ──X──"
-        },
-        "CZ": {
-            "name": "Controlled-Z Gate (CZ)",
-            "type": "Two-qubit gate",
-            "description": "CZ applies a phase flip only when both qubits are in |1⟩.",
-            "matrix": "[[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,-1]]",
-            "example": "|11⟩ → -|11⟩",
-            "use": "Conditional phase operation.",
-            "circuit": "q0: ──●──\n      │\nq1: ──●──"
-        },
-        "SWAP": {
-            "name": "SWAP Gate",
-            "type": "Two-qubit gate",
-            "description": "SWAP exchanges the quantum states of two qubits.",
-            "matrix": "[[1,0,0,0], [0,0,1,0], [0,1,0,0], [0,0,0,1]]",
-            "example": "|01⟩ → |10⟩   and   |10⟩ → |01⟩",
-            "use": "Exchanging the states of two qubits.",
-            "circuit": "q0: ──×──\n      │\nq1: ──×──"
-        }
-    }
+    st.write(
+        "Create a quantum circuit by "
+        "selecting gates for each qubit."
+    )
 
-    single_gates = ["H", "X", "Y", "Z", "S", "T"]
-    two_gates = ["CNOT", "CZ", "SWAP"]
-    all_gates = single_gates + two_gates
-
-    if "builder_num_qubits" not in st.session_state:
-        st.session_state.builder_num_qubits = 2
-    if "builder_operations" not in st.session_state:
-        st.session_state.builder_operations = []
 
     n_qubits = st.selectbox(
         "Number of Qubits",
-        [1, 2, 3, 4],
-        index=[1, 2, 3, 4].index(st.session_state.builder_num_qubits),
-        key="builder_qubit_count"
+        [1, 2, 3]
     )
 
-    if n_qubits != st.session_state.builder_num_qubits:
-        st.session_state.builder_num_qubits = n_qubits
-        st.session_state.builder_operations = []
 
-    st.subheader("➕ Add a Gate")
+    gates = [
+        "None",
+        "H",
+        "X",
+        "Y",
+        "Z",
+        "RX",
+        "RY",
+        "RZ"
+    ]
 
-    gate = st.selectbox(
-        "Select Gate",
-        all_gates,
-        key="builder_gate_select"
-    )
 
-    q1 = st.selectbox(
-        "Select Qubit",
-        list(range(n_qubits)),
-        format_func=lambda x: f"q{x}",
-        key="builder_q1"
-    )
+    selected_gates = []
 
-    q2 = None
-    if gate in two_gates:
-        q2 = st.selectbox(
-            "Select Target / Second Qubit",
-            [q for q in range(n_qubits) if q != q1],
-            format_func=lambda x: f"q{x}",
-            key="builder_q2"
+
+    for q in range(n_qubits):
+
+        gate = st.selectbox(
+            f"Qubit {q}",
+            gates,
+            key=f"gate_{q}"
         )
 
-    c1, c2, c3 = st.columns(3)
+        selected_gates.append(
+            gate
+        )
 
-    with c1:
-        if st.button("➕ Add Gate", use_container_width=True):
-            if gate in two_gates and q1 == q2:
-                st.error("A two-qubit gate needs two different qubits.")
-            else:
-                st.session_state.builder_operations.append(
-                    {"gate": gate, "q1": q1, "q2": q2}
-                )
-                st.success(f"{gate} gate added.")
 
-    with c2:
-        if st.button("↩️ Remove Last Gate", use_container_width=True):
-            if st.session_state.builder_operations:
-                removed = st.session_state.builder_operations.pop()
-                st.success(f"Removed {removed['gate']} gate.")
-            else:
-                st.info("No gates to remove.")
+    cnot = False
 
-    with c3:
-        if st.button("🗑️ Clear Circuit", use_container_width=True):
-            st.session_state.builder_operations = []
-            st.success("Circuit cleared.")
 
-    # Build the circuit from the stored operations.
-    qc = QuantumCircuit(n_qubits)
+    if n_qubits >= 2:
 
-    for op in st.session_state.builder_operations:
-        g = op["gate"]
-        a = op["q1"]
-        b = op.get("q2")
-        if g == "H":
-            qc.h(a)
-        elif g == "X":
-            qc.x(a)
-        elif g == "Y":
-            qc.y(a)
-        elif g == "Z":
-            qc.z(a)
-        elif g == "S":
-            qc.s(a)
-        elif g == "T":
-            qc.t(a)
-        elif g == "CNOT":
-            qc.cx(a, b)
-        elif g == "CZ":
-            qc.cz(a, b)
-        elif g == "SWAP":
-            qc.swap(a, b)
+        cnot = st.checkbox(
+            "Add CNOT between Q0 → Q1"
+        )
 
-    st.subheader("📋 Gates in Current Circuit")
-    if st.session_state.builder_operations:
-        for i, op in enumerate(st.session_state.builder_operations, start=1):
-            if op.get("q2") is None:
-                st.write(f"{i}. **{op['gate']}** → q{op['q1']}")
-            else:
-                st.write(f"{i}. **{op['gate']}** → q{op['q1']} → q{op['q2']}")
-    else:
-        st.info("No gates added yet. Select a gate and click Add Gate.")
 
-    st.subheader("⚛️ Circuit")
-    try:
-        st.pyplot(draw_circuit(qc))
-    except Exception:
-        st.code(str(qc))
+    qc = QuantumCircuit(
+        n_qubits
+    )
 
-    if st.button("▶️ Simulate Circuit", use_container_width=True):
-        if not st.session_state.builder_operations:
-            st.warning("Add at least one gate before simulation.")
-        else:
-            counts = run_circuit(qc)
-            st.session_state.history.append(
-                {"Circuit": str(qc), "Result": counts}
+
+    for q, gate in enumerate(
+        selected_gates
+    ):
+
+        if gate == "H":
+
+            qc.h(q)
+
+        elif gate == "X":
+
+            qc.x(q)
+
+        elif gate == "Y":
+
+            qc.y(q)
+
+        elif gate == "Z":
+
+            qc.z(q)
+
+        elif gate == "RX":
+
+            qc.rx(
+                np.pi / 2,
+                q
             )
-            save_profile()
-            st.subheader("📊 Measurement Result")
-            st.write(counts)
-            st.bar_chart(pd.DataFrame({"Count": counts}).T)
-            add_points(10)
-            check_badges()
-            st.success("Circuit executed! +10 points")
 
-    # --------------------------------------------------------
-    # Learn about the selected gate
-    # --------------------------------------------------------
-    st.divider()
-    st.subheader("📖 Learn About This Gate")
+        elif gate == "RY":
 
-    info = GATE_INFO[gate]
-    st.markdown(f"### {info['name']}")
-    st.caption(info["type"])
-    st.write(info["description"])
+            qc.ry(
+                np.pi / 2,
+                q
+            )
 
-    with st.expander("📐 Matrix Representation", expanded=True):
-        st.code(info["matrix"])
+        elif gate == "RZ":
 
-    with st.expander("🔄 Input → Output", expanded=True):
-        st.code(info["example"])
+            qc.rz(
+                np.pi / 2,
+                q
+            )
 
-    with st.expander("🧩 Simple Circuit Example", expanded=True):
-        st.code(info["circuit"])
 
-    st.info(f"Main use: {info['use']}")
+    if cnot:
 
-    if st.button(f"💡 Explain {gate} Gate", use_container_width=True):
-        st.session_state.builder_operations.append(
-            {"gate": gate, "q1": q1, "q2": q2}
+        qc.cx(
+            0,
+            1
         )
+
+
+    st.subheader(
+        "Circuit"
+    )
+
+
+    try:
+
+        st.pyplot(
+            draw_circuit(qc)
+        )
+
+    except Exception:
+
+        st.code(
+            str(qc)
+        )
+
+
+    if st.button(
+        "▶️ Run Circuit"
+    ):
+
+        counts = run_circuit(
+            qc
+        )
+
+        st.session_state.history.append(
+            {
+                "Circuit": str(qc),
+                "Result": counts
+            }
+        )
+        save_profile()
+
+        st.subheader(
+            "Measurement Result"
+        )
+
+        st.write(
+            counts
+        )
+
+        add_points(10)
+
+        check_badges()
+
         st.success(
-            f"{gate} gate added to the circuit. Now you can simulate it above."
+            "Circuit executed! +10 points"
         )
+
 
 # =========================================================
 # QUANTUM ALGORITHMS
