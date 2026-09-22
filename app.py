@@ -9,7 +9,14 @@ import time
 
 from pathlib import Path
 from supabase import create_client
+
+
+# ============================================================
+# QISKIT LAZY IMPORT
+# ============================================================
+
 def get_qiskit():
+
     from qiskit import QuantumCircuit, transpile
     from qiskit_aer import AerSimulator
 
@@ -77,7 +84,6 @@ DEFAULT_SESSION_STATE = {
     "workflow_score": None,
 
     "quiz_score": 0,
-
 
     "ai_answer": "",
 
@@ -736,9 +742,8 @@ and provide an introductory quantum circuit example.
 # ============================================================
 
 def workflow_build_circuit(topic):
-    
-    QuantumCircuit, _, _ = get_qiskit()
 
+    QuantumCircuit, _, _ = get_qiskit()
 
     if topic == "Qubit":
 
@@ -911,7 +916,8 @@ def simulate_circuit(
 ):
 
     try:
-          _, transpile, AerSimulator = get_qiskit()
+
+        _, transpile, AerSimulator = get_qiskit()
 
         simulator = AerSimulator()
 
@@ -1448,8 +1454,8 @@ def render_learn():
 # ============================================================
 
 def render_algorithms():
-    QuantumCircuit, _, _ = get_qiskit()
 
+    QuantumCircuit, _, _ = get_qiskit()
 
     st.title(
         "🧠 Quantum Algorithms"
@@ -2032,6 +2038,14 @@ def render_workflow():
         counts = (
             st.session_state.workflow_simulation
         )
+
+        if qc is None:
+
+            st.error(
+                "No circuit available."
+            )
+
+            return
 
         st.code(
             str(
